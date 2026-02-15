@@ -13,11 +13,11 @@ const nextConfig = {
       beforeFiles: [
         {
           source: "/blog",
-          destination: `${blogDestination}/`,
+          destination: `${blogDestination}/blog`,
         },
         {
           source: "/blog/:path*",
-          destination: `${blogDestination}/:path*`,
+          destination: `${blogDestination}/blog/:path*`,
         },
       ],
     };

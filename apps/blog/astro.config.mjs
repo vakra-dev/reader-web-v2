@@ -7,8 +7,7 @@ import tailwind from "@astrojs/tailwind";
 
 export default defineConfig({
   site: "https://reader.dev",
-  // Removed base for standalone deployment (deployed at root, proxied to /blog)
-  // base: "/blog",
+  base: "/blog",
 
   integrations: [
     mdx(),
