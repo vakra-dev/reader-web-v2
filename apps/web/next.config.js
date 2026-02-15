@@ -2,21 +2,25 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // Proxy /blog/* to Astro in development (transparent, no URL change)
+  // Proxy /blog/* to Astro (transparent, no URL change)
   async rewrites() {
-    if (process.env.NODE_ENV === "development") {
-      return [
+    const blogDestination =
+      process.env.NODE_ENV === "development"
+        ? "http://localhost:4321"
+        : "https://reader-web-v2-blog.vercel.app";
+
+    return {
+      beforeFiles: [
         {
           source: "/blog",
-          destination: "http://localhost:4321/blog",
+          destination: `${blogDestination}/blog`,
         },
         {
           source: "/blog/:path*",
-          destination: "http://localhost:4321/blog/:path*",
+          destination: `${blogDestination}/blog/:path*`,
         },
-      ];
-    }
-    return [];
+      ],
+    };
   },
 };
 
