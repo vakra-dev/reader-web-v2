@@ -1,0 +1,18 @@
+{
+  "name": "reader",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:blog": "pnpm --filter blog dev",
+    "build": "turbo build",
+    "build:web": "pnpm --filter web build",
+    "build:blog": "pnpm --filter blog build",
+    "lint": "turbo lint",
+    "clean": "turbo clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  },
+  "packageManager": "pnpm@8.15.0"
+}

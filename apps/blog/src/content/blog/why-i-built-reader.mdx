@@ -1,0 +1,103 @@
+---
+title: "Why I Built Reader"
+description: "The web wasn't built for machines. I built Reader to change that. Open-source web scraping that gives your agents clean markdown from any webpage."
+date: 2026-02-14
+author: "Nihal"
+category: "Announcements"
+keywords: ["web scraping", "AI agents", "LLM", "web data", "Reader", "open source"]
+draft: false
+---
+
+The web wasn't built for machines to read. It was built for humans, with all the complexity that entails.
+
+I learned this the hard way.
+
+## The Problem
+
+If you've built anything with LLMs that needs to touch the web, you know the pain. You start with a simple idea (let the agent read a webpage) and suddenly you're drowning in infrastructure.
+
+The HTML comes back as a mess of ads, navigation, cookie banners, and tracking scripts. The actual content, the part you care about, is buried somewhere in the middle. So you write a parser. Then you discover half the web is JavaScript-rendered, so your parser sees nothing. You spin up a headless browser. Now you're managing Puppeteer, dealing with memory leaks, and watching your costs climb.
+
+Then the blocks start.
+
+Anti-bot systems flag your requests. CAPTCHAs appear. Your IP gets banned. You add proxies, rotate user agents, implement retry logic. What started as "read a webpage" has become a distributed systems problem.
+
+I've been there. Not once, but dozens of times across different projects. Every time I built something that needed web access, I rebuilt this stack from scratch. The same problems. The same solutions. The same wasted weeks.
+
+Reader exists because I got tired of solving this problem over and over again.
+
+## Two Primitives. That's It.
+
+Reader is open-source web scraping for LLMs. Two primitives: `scrape()` for URLs, `crawl()` for websites. Everything else happens under the hood.
+
+**Scrape** turns any URL into clean markdown:
+
+```javascript
+import { ReaderClient } from "@vakra-dev/reader";
+
+const reader = new ReaderClient();
+
+const result = await reader.scrape({
+  urls: ["https://example.com/article"],
+});
+
+console.log(result.data[0].markdown);
+// Clean article text, no junk
+
+await reader.close();
+```
+
+You get markdown. Structured, clean, ready for your context window. No parsing HTML. No extracting main content. No fighting with JavaScript rendering.
+
+**Crawl** handles entire websites:
+
+```javascript
+const result = await reader.crawl({
+  url: "https://docs.example.com",
+  maxPages: 50,
+  maxDepth: 3,
+});
+
+// BFS link discovery, respects depth and page limits
+for (const page of result.data) {
+  console.log(page.url, page.markdown);
+}
+```
+
+Point it at a site, set your limits, get back clean markdown for every page. The crawler handles link discovery, deduplication, and queue management automatically.
+
+## What's Under the Hood
+
+Reader is built on Ulixee Hero with production-grade infrastructure:
+
+**Stealth browsing.** TLS fingerprinting, realistic browser behavior, anti-detection measures. The stuff that takes weeks to get right.
+
+**Browser pool.** Auto-recycling browsers, health monitoring, queue management. No more memory leaks killing your scraping jobs at 3am.
+
+**Proxy support.** Datacenter and residential proxies with rotation strategies. Plug in your proxy provider and go.
+
+**Clean output.** Automatic main content extraction. You get the article, not the sidebar and footer.
+
+All of this is open source. Check the code, run it yourself, contribute improvements.
+
+## Why Open Source
+
+I've used enough scraping tools to know the pattern. They work great in demos. Then you hit edge cases. The documentation doesn't cover it. Support takes days. You end up reverse-engineering the tool anyway.
+
+Reader is open source because scraping infrastructure shouldn't be a black box. When something breaks, you can see exactly why. When you need a feature, you can add it. When you find a bug, you can fix it.
+
+The code is on GitHub. The package is on npm. Install it and start scraping.
+
+```bash
+npm install @vakra-dev/reader
+```
+
+## Try It
+
+Reader works from the command line or programmatically in your code. Two primitives: scrape and crawl. Clean markdown output. Ready for your agents.
+
+I built Reader because I needed it. If you're building AI applications that need web access, you probably need it too.
+
+---
+
+*Questions? Check the [documentation](https://docs.reader.dev) or open an issue on [GitHub](https://github.com/vakra-dev/reader).*
