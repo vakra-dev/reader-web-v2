@@ -1,68 +1,97 @@
-import {
-  FileText,
-  Layers,
-  Globe,
-  Shield,
-  Terminal,
-  Zap,
-} from "lucide-react";
+"use client";
 
-const features = [
+import { motion } from "framer-motion";
+import { Globe, Layers, Monitor } from "lucide-react";
+
+const capabilities = [
   {
-    icon: Zap,
-    title: "Production-Grade",
-    description: "Built on Ulixee Hero with TLS fingerprinting and stealth browsing",
-  },
-  {
-    icon: FileText,
-    title: "Clean Output",
-    description: "Markdown and HTML with automatic main content extraction",
+    icon: Globe,
+    title: "Read",
+    description:
+      "Give Reader a URL. Get back clean markdown, HTML, or structured data. JavaScript rendering, anti-bot protection, proxy rotation - all handled automatically. One credit, one page, every time.",
+    badge: null,
   },
   {
     icon: Layers,
-    title: "Browser Pool",
-    description: "Auto-recycling, health monitoring, and queue management",
+    title: "Crawl",
+    description:
+      "Map and extract content across thousands of pages. Set your depth, define patterns, get structured output at scale. No infrastructure to manage.",
+    badge: null,
   },
   {
-    icon: Globe,
-    title: "Website Crawling",
-    description: "BFS link discovery with depth and page limits",
-  },
-  {
-    icon: Shield,
-    title: "Proxy Support",
-    description: "Datacenter and residential proxies with rotation strategies",
-  },
-  {
-    icon: Terminal,
-    title: "CLI Included",
-    description: "Use from command line or programmatically in your code",
+    icon: Monitor,
+    title: "Browse",
+    description:
+      "Spin up cloud browser sessions with full Playwright/Puppeteer compatibility. Log into portals, navigate authenticated dashboards, hold sessions for hours. Your scripts connect over CDP - zero new APIs to learn.",
+    badge: null,
   },
 ];
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 },
+  },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0 },
+};
+
 export function Features() {
   return (
-    <section className="py-20 px-6 border-t border-neutral-200">
-      <div className="max-w-6xl mx-auto">
-        <h2 className="text-3xl font-bold text-center mb-4">
-          Everything you need for web scraping
-        </h2>
-        <p className="text-neutral-600 text-center mb-12 max-w-2xl mx-auto">
-          Reader handles the hard parts so you can focus on building your AI applications.
-        </p>
+    <section className="py-24 relative">
+      <div className="container mx-auto px-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-16"
+        >
+          <h2 className="text-3xl md:text-4xl font-bold mb-4 text-fg">
+            What Reader Does
+          </h2>
+          <p className="text-lg text-fg-muted max-w-xl mx-auto">
+            Three primitives. One platform. Complete web access.
+          </p>
+        </motion.div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map((feature) => (
-            <div
-              key={feature.title}
-              className="p-6 rounded-xl border border-neutral-200 hover:border-neutral-300 transition-colors"
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          className="grid md:grid-cols-3 gap-4 max-w-5xl mx-auto"
+        >
+          {capabilities.map((cap) => (
+            <motion.div
+              key={cap.title}
+              variants={cardVariants}
+              className="group relative p-6 border border-edge rounded-md bg-transparent transition-all duration-300 hover:border-edge-hover overflow-hidden"
             >
-              <feature.icon className="w-10 h-10 text-accent-500 mb-4" />
-              <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-              <p className="text-neutral-600 text-sm">{feature.description}</p>
-            </div>
+              {/* Accent glow on hover */}
+              <div className="absolute -top-12 -left-12 w-24 h-24 bg-accent-500/0 rounded-full blur-2xl transition-all duration-500 group-hover:bg-accent-500/15" />
+
+              <div className="relative z-10">
+                {cap.badge && (
+                  <span className="absolute top-0 right-0 text-xs font-medium px-2 py-0.5 rounded-full bg-accent-50 text-accent-500 border border-accent-200">
+                    {cap.badge}
+                  </span>
+                )}
+                <cap.icon className="w-6 h-6 text-fg-muted mb-4 transition-colors duration-300 group-hover:text-accent-500" />
+                <h3 className="text-lg font-semibold mb-2 text-fg">
+                  {cap.title}
+                </h3>
+                <p className="text-base text-fg-muted leading-relaxed">
+                  {cap.description}
+                </p>
+              </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
   );

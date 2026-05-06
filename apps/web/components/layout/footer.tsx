@@ -1,45 +1,42 @@
-import Image from "next/image";
-import { Github } from "lucide-react";
-
 export function Footer() {
   return (
-    <footer className="border-t border-neutral-200 py-12">
-      <div className="max-w-6xl mx-auto px-6">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-4">
-            <Image
-              src="/text_logo.png"
-              alt="Reader"
-              width={100}
-              height={33}
-            />
-            <span className="text-neutral-500 text-sm">
-              Open-source web scraping for LLMs
-            </span>
-          </div>
-
-          <div className="flex items-center gap-6">
+    <footer className="border-t border-edge/50 py-6 mt-auto">
+      <div className="container mx-auto px-4">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-base text-fg-tertiary">
+          <span>&copy; 2026 Reader</span>
+          <div className="flex items-center gap-3">
+            <a
+              href="https://app.reader.dev"
+              className="hover:text-fg-secondary transition-colors"
+            >
+              Platform
+            </a>
+            <span className="text-edge">·</span>
             <a
               href="https://docs.reader.dev"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
+              className="hover:text-fg-secondary transition-colors"
             >
               Docs
             </a>
+            <span className="text-edge">·</span>
+            <a
+              href="https://reader.dev/blog"
+              className="hover:text-fg-secondary transition-colors"
+            >
+              Blog
+            </a>
+            <span className="text-edge">·</span>
             <a
               href="https://github.com/vakra-dev/reader"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-neutral-600 hover:text-neutral-900 transition-colors"
+              className="hover:text-fg-secondary transition-colors"
             >
-              <Github className="w-5 h-5" />
+              GitHub
             </a>
           </div>
-        </div>
-
-        <div className="mt-8 pt-8 border-t border-neutral-200 text-center text-sm text-neutral-500">
-          <p>Apache 2.0 License</p>
         </div>
       </div>
     </footer>

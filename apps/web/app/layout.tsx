@@ -1,39 +1,31 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
-import { Header } from "@/components/Header";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jetbrains-mono",
-});
-
 export const metadata: Metadata = {
-  title: "Reader - Open-source web scraping for LLMs",
+  metadataBase: new URL("https://reader.dev"),
+  title: "Reader | AI Web Infrastructure Platform",
   description:
-    "Production-grade web scraping engine. Two primitives. Clean markdown. Ready for your agents.",
+    "The web infrastructure platform for AI. Scrape, crawl, and automate the web from a single API. Use the platform, the API, or self-host.",
   icons: {
     icon: "/favicon.ico",
   },
   keywords: [
+    "web data",
     "web scraping",
     "markdown",
     "llm",
     "ai",
     "crawler",
-    "headless browser",
-    "nodejs",
+    "api",
+    "platform",
+    "seo",
+    "data extraction",
   ],
-  authors: [{ name: "Vakra Dev" }],
+  authors: [{ name: "Vakra" }],
   openGraph: {
-    title: "Reader - Open-source web scraping for LLMs",
+    title: "Reader | AI Web Infrastructure Platform",
     description:
-      "Production-grade web scraping engine. Two primitives. Clean markdown. Ready for your agents.",
+      "The web infrastructure platform for AI. Scrape, crawl, and automate the web from a single API.",
     url: "https://reader.dev",
     siteName: "Reader",
     type: "website",
@@ -41,26 +33,22 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Reader - Open-source web scraping for LLMs",
+    title: "Reader | AI Web Infrastructure Platform",
     description:
-      "Production-grade web scraping engine. Two primitives. Clean markdown. Ready for your agents.",
+      "The web infrastructure platform for AI. Scrape, crawl, and automate the web from a single API.",
     images: ["/og-image.png"],
   },
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html
-      lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable}`}
-    >
-      <body className="min-h-screen flex flex-col bg-background text-foreground antialiased font-sans">
-        <Header />
-        <main className="flex-1">{children}</main>
+    <html lang="en">
+      <body className="min-h-screen flex flex-col antialiased bg-page">
+        {children}
       </body>
     </html>
   );

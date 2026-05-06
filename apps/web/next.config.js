@@ -6,7 +6,7 @@ const nextConfig = {
   async rewrites() {
     const blogDestination =
       process.env.NODE_ENV === "development"
-        ? "http://localhost:4321"
+        ? "http://localhost:6007"
         : "https://reader-web-v2-blog.vercel.app";
 
     return {

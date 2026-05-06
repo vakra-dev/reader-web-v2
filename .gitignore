@@ -23,6 +23,9 @@ out/
 # turbo
 .turbo/
 
+# build info
+*.tsbuildinfo
+
 # misc
 *.log
 npm-debug.log*
