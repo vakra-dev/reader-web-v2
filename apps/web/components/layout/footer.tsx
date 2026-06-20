@@ -6,7 +6,7 @@ export function Footer() {
           <span>&copy; 2026 Reader</span>
           <div className="flex items-center gap-3">
             <a
-              href="https://app.reader.dev"
+              href="https://console.reader.dev"
               className="hover:text-fg-secondary transition-colors"
             >
               Platform

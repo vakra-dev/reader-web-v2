@@ -22,7 +22,7 @@ export function BottomCTA() {
           </p>
 
           <a
-            href="https://app.reader.dev"
+            href="https://console.reader.dev"
             className="inline-block px-8 py-3 bg-accent-500 text-white font-semibold rounded-md hover:bg-accent-600 transition-colors text-base glow"
           >
             Try Reader

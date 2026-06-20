@@ -28,7 +28,7 @@ export function Header() {
           <a href="/markdown" className={linkClass}>
             Markdown
           </a>
-          <a href="https://app.reader.dev" className={linkClass}>
+          <a href="https://console.reader.dev" className={linkClass}>
             Platform
           </a>
           <a
@@ -56,7 +56,7 @@ export function Header() {
           </a>
 
           <a
-            href="https://app.reader.dev"
+            href="https://console.reader.dev"
             className="ml-1 px-4 py-1.5 text-sm font-medium rounded-md bg-accent-500 text-white hover:bg-accent-600 transition-colors"
           >
             Get Started
@@ -80,7 +80,7 @@ export function Header() {
             <a href="/markdown" className={linkClass}>
               Markdown
             </a>
-            <a href="https://app.reader.dev" className={linkClass}>
+            <a href="https://console.reader.dev" className={linkClass}>
               Platform
             </a>
             <a href="https://docs.reader.dev" className={linkClass}>
@@ -100,7 +100,7 @@ export function Header() {
               GitHub
             </a>
             <a
-              href="https://app.reader.dev"
+              href="https://console.reader.dev"
               className="mt-2 px-4 py-2 bg-accent-500 text-white text-sm font-medium rounded-md text-center hover:bg-accent-600 transition-colors"
             >
               Get Started

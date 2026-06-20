@@ -61,7 +61,7 @@ export function Hero() {
           className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8"
         >
           <a
-            href="https://app.reader.dev"
+            href="https://console.reader.dev"
             className="px-8 py-3 bg-accent-500 text-white font-semibold rounded-md hover:bg-accent-600 transition-colors text-base"
           >
             Get Started
