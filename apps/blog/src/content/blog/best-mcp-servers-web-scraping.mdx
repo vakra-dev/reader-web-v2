@@ -1,0 +1,179 @@
+---
+title: "7 Best MCP Servers for Web Scraping (2026)"
+description: "Compare the top MCP servers that give AI agents web scraping capabilities. Covers tools, output formats, browser automation, and setup instructions."
+date: 2026-07-08
+author: "Nihal Kaul"
+category: "Tools"
+keywords:
+  - "mcp server web scraping"
+  - "best mcp servers"
+  - "model context protocol scraping"
+  - "ai agent web access"
+schemaType: "article"
+faq:
+  - question: "What is an MCP server for web scraping?"
+    answer: "An MCP (Model Context Protocol) server gives AI agents the ability to scrape web pages, crawl sites, and extract data. When connected to tools like Claude Code or Cursor, the AI can fetch live web content and use it for research, coding, and analysis."
+  - question: "Which MCP server is best for getting clean markdown from websites?"
+    answer: "Reader MCP, Firecrawl MCP, and ZenRows MCP all return clean markdown. Reader and Firecrawl return markdown by default. The official Fetch MCP also converts HTML to markdown but does not render JavaScript or bypass anti-bot protection."
+  - question: "How do I add an MCP server to Claude Code?"
+    answer: "Run 'claude mcp add' followed by the server name and command. For Reader: 'claude mcp add --env READER_API_KEY=rdr_your_key reader -- npx -y @vakra-dev/reader-mcp'. The server runs locally and connects via stdio."
+  - question: "Can MCP servers crawl entire websites?"
+    answer: "Yes. Reader MCP and Firecrawl MCP both support crawling. Reader's reader_crawl tool discovers and scrapes linked pages with depth and page limits. Firecrawl's crawl tool follows links recursively. The official Fetch MCP only fetches single URLs."
+---
+
+MCP (Model Context Protocol) is an open standard that connects AI applications to external tools. When you add a web scraping MCP server to Claude Code, Cursor, or another MCP-compatible tool, your AI agent can fetch live web data, crawl sites, and extract structured information without you writing any scraping code.
+
+This guide compares seven MCP servers that give AI agents web scraping capabilities.
+
+## Quick Comparison
+
+| MCP Server | Tools | Markdown | Crawl | Anti-Bot | Browser Sessions |
+|-----------|-------|----------|-------|----------|-----------------|
+| Reader MCP | 8 | Default | Yes | Yes | Yes (CDP) |
+| Firecrawl MCP | 7+ | Default | Yes | Partial | Yes (Interact) |
+| Bright Data MCP | 60+ | Yes | Yes | Yes | Yes |
+| ZenRows MCP | Scrape | Yes | No | Best in class | No |
+| Browserbase MCP | 6 | Via Fetch | No | Yes | Yes (Stagehand) |
+| Playwright MCP | 40+ | No | No | No | Yes |
+| Fetch MCP | 1 | Yes | No | No | No |
+
+## 1. Reader MCP
+
+**Package:** `@vakra-dev/reader-mcp`
+
+Reader's MCP server exposes eight tools that cover scraping, crawling, extraction, and browser automation:
+
+| Tool | What It Does |
+|------|-------------|
+| `reader_scrape` | Scrape a URL, return clean markdown |
+| `reader_batch_scrape` | Scrape multiple URLs as an async job |
+| `reader_crawl` | Crawl a site with depth and page limits |
+| `reader_discover` | Discover URLs without scraping content |
+| `reader_extract` | Extract structured data via JSON schema |
+| `reader_job_status` | Check async job progress |
+| `reader_session_create` | Create a CDP browser session |
+| `reader_credits` | Check usage and balance |
+
+**Setup in Claude Code:**
+
+```bash
+claude mcp add --env READER_API_KEY=rdr_your_key reader \
+  -- npx -y @vakra-dev/reader-mcp
+```
+
+**Setup in Cursor** (`.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "reader": {
+      "command": "npx",
+      "args": ["-y", "@vakra-dev/reader-mcp"],
+      "env": { "READER_API_KEY": "rdr_your_key" }
+    }
+  }
+}
+```
+
+Every tool that returns content gives the agent clean markdown powered by [Supermarkdown](https://supermarkdown.dev). The crawl tool supports depth limits (1-10) and page limits (1-10,000).
+
+**Best for:** AI developers who need scraping, crawling, and browser sessions in one MCP server.
+
+## 2. Firecrawl MCP
+
+**Package:** `firecrawl-mcp`
+
+[Firecrawl's MCP server](https://docs.firecrawl.dev) exposes tools for scraping, crawling, searching, URL discovery, browser interaction, and structured extraction. It returns markdown by default.
+
+Key tools include `scrape` (single page), `crawl` (recursive site crawl), `search` (web search with content extraction), `map` (URL discovery), and `interact` (browser automation with AI prompts or code execution).
+
+A free tier supports scrape, search, and interact without an API key (rate-limited). Crawl, map, and extract require an API key.
+
+```bash
+claude mcp add --env FIRECRAWL_API_KEY=fc-your_key firecrawl \
+  -- npx -y firecrawl-mcp
+```
+
+**Best for:** Teams that need web search + scraping + crawling in one MCP server with a large community.
+
+## 3. Bright Data MCP
+
+**Package:** `@brightdata/mcp`
+
+[Bright Data's MCP server](https://github.com/luminati-io/brightdata-mcp) is the most extensive, with over 60 tools organized into nine groups: e-commerce, social media, browser automation, finance, business, research, app stores, travel, and advanced scraping.
+
+Default tools include `search_engine` (web search) and `scrape_as_markdown` (any URL to markdown). The browser group provides `scraping_browser_navigate`, `scraping_browser_click`, `scraping_browser_type`, and `scraping_browser_screenshot` for full browser automation.
+
+Domain-specific tools handle structured extraction from popular sites like Amazon, LinkedIn, YouTube, Zillow, and others.
+
+```bash
+claude mcp add --env API_TOKEN=your_token brightdata \
+  -- npx -y @brightdata/mcp
+```
+
+**Best for:** Enterprise use cases that need structured extraction from specific site categories.
+
+## 4. ZenRows MCP
+
+**Package:** `@zenrows/mcp`
+
+[ZenRows' MCP server](https://docs.zenrows.com/integrations/mcp/mcp-overview) focuses on one thing: scraping any webpage with the strongest anti-bot bypass available. It returns clean markdown, HTML, or structured JSON.
+
+The server handles Cloudflare, DataDome, Akamai, and PerimeterX challenges automatically. It renders JavaScript and supports residential proxies.
+
+```bash
+claude mcp add --env ZENROWS_API_KEY=your_key zenrows \
+  -- npx -y @zenrows/mcp
+```
+
+**Best for:** Scraping protected sites where [anti-bot bypass](/blog/403-error-web-scraping) is the primary concern.
+
+## 5. Browserbase MCP
+
+**Package:** `@browserbasehq/mcp-server-browserbase`
+
+[Browserbase's MCP server](https://docs.browserbase.com/integrations/mcp) provides browser automation via Stagehand. It exposes six tools: `start` (create a session), `navigate` (load a page), `act` (interact via natural language), `observe` (inspect elements), `extract` (pull data), and `end` (close session).
+
+The `act` tool accepts natural language prompts like "click the login button" or "fill in the search field with 'web scraping'." This is useful for multi-step interactions that require human-like browsing.
+
+**Best for:** AI agents that need to interact with websites through natural language commands.
+
+## 6. Playwright MCP
+
+**Package:** `@playwright/mcp`
+
+[Microsoft's Playwright MCP server](https://github.com/microsoft/playwright-mcp) provides over 40 browser automation tools. It handles navigation, clicking, typing, form filling, tab management, screenshots, file uploads, and network interception.
+
+The key difference from scraping MCP servers: Playwright MCP returns accessibility snapshots of pages, not markdown. It is a browser automation tool, not a content extraction tool. You get the full DOM structure, which is useful for agents that need to navigate and interact with pages but not extract clean content.
+
+**Best for:** AI agents that need full browser control for testing, form filling, or multi-step navigation.
+
+## 7. Fetch MCP (Reference Implementation)
+
+**Package:** `mcp-server-fetch` (Python, also available as Docker image)
+
+The [official Fetch MCP server](https://github.com/modelcontextprotocol/servers/tree/main/src/fetch) from the MCP repository is a minimal reference implementation. It exposes one tool: `fetch`, which takes a URL and returns the content as markdown.
+
+The `fetch` tool converts HTML to markdown by default. It supports `max_length` (default 5,000 characters) and `start_index` parameters for paginating through large pages. Set `raw=true` to get unprocessed content.
+
+This server does not render JavaScript, bypass anti-bot protection, or support crawling. It is a starting point for basic URL fetching, not a production scraping solution.
+
+**Best for:** Simple URL fetching where JavaScript rendering and anti-bot are not needed.
+
+## How to Choose
+
+The choice depends on what your AI agent needs to do:
+
+- **Scrape + crawl + browser sessions?** [Reader MCP](/blog/reader-mcp-server). One server covers all three.
+- **Scrape + crawl + web search?** Firecrawl MCP. The search tool is unique.
+- **Structured extraction from specific sites?** Bright Data MCP. 60+ specialized tools.
+- **Scrape protected sites?** ZenRows MCP. Strongest anti-bot.
+- **Natural language browser interaction?** Browserbase MCP with Stagehand.
+- **Full browser automation?** Playwright MCP. 40+ tools for navigation and interaction.
+- **Basic URL fetching?** Fetch MCP. Minimal and free.
+
+## Conclusion
+
+MCP servers turn AI coding tools into web-aware agents. The right server depends on whether you need content extraction (Reader, Firecrawl, ZenRows), browser automation (Playwright, Browserbase), or structured data from specific sites (Bright Data).
+
+Set up [Reader's MCP server](/blog/reader-mcp-server) in one command to give your AI agent scraping, crawling, and browser capabilities. Check the [documentation](https://docs.reader.dev) for the full API reference.

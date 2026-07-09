@@ -36,7 +36,7 @@ Here is what to evaluate:
 - **Anti-bot bypass.** Most websites run some form of bot detection. The API should handle Cloudflare challenges, CAPTCHAs, and fingerprint checks without extra configuration.
 - **Crawl support.** Single-page scraping is fine for one-off tasks. For RAG pipelines and knowledge bases, you need to crawl entire sites.
 - **JavaScript rendering.** Over half of the web renders content on the client side. The API should handle JavaScript automatically.
-- **Framework integration.** If you are using [LangChain](/blog/langchain-web-scraping), [LlamaIndex](/blog/llamaindex-web-scraping), or [MCP](/blog/reader-mcp-server), the API should plug in without glue code.
+- **Framework integration.** If you are using [LangChain](https://python.langchain.com/docs/introduction/), [LlamaIndex](https://docs.llamaindex.ai/), or [MCP](/blog/reader-mcp-server), the API should plug in without glue code.
 
 ## Comparison at a Glance
 
@@ -46,7 +46,7 @@ Here is what to evaluate:
 | Firecrawl | Markdown | Yes | Partial | Yes (Interact) | LangChain, LlamaIndex, MCP |
 | Spider.cloud | Markdown | Yes | Yes | No | LangChain, LlamaIndex, CrewAI |
 | ZenRows | HTML (markdown via param) | No | Yes | Yes (Scraping Browser) | MCP |
-| ScrapingBee | HTML | No | Yes | No | No |
+| ScrapingBee | HTML | CLI only | Yes | No | No |
 | Apify | JSON | Yes (Crawlee) | Partial | No | MCP |
 | Bright Data | Structured data | Yes | Yes | Yes (Browser API) | MCP |
 
@@ -72,13 +72,13 @@ print(result.data[0].markdown)
 
 The output is clean markdown with headings, lists, code blocks, and tables preserved. No navigation, no ads, no cookie banners.
 
-Reader also supports [browser sessions](/blog/browser-automation-ai-agents) where you connect directly via CDP. This means your existing Playwright or Puppeteer code works without changes, but the browser runs in the cloud with stealth and proxies already configured.
+Reader also supports [browser sessions](https://docs.reader.dev) where you connect directly via CDP. This means your existing Playwright or Puppeteer code works without changes, but the browser runs in the cloud with stealth and proxies already configured.
 
 **Strengths:** Markdown output quality, browser sessions via CDP, crawl with depth control, built for AI workflows from the ground up.
 
 **Limitations:** Newer than some competitors, smaller community.
 
-**Best for:** AI developers building [RAG pipelines](/blog/rag-pipeline-web-data), agents that need web access, and teams that want one API for scraping, crawling, and browser automation.
+**Best for:** AI developers building [RAG pipelines](/blog/scrape-website-to-markdown), agents that need web access, and teams that want one API for scraping, crawling, and browser automation.
 
 ## 2. Firecrawl
 
@@ -100,7 +100,7 @@ const result = await app.scrapeUrl("https://example.com/blog/getting-started", {
 console.log(result.markdown);
 ```
 
-Firecrawl has SDKs for Python, Node.js, Go, Rust, Java, and Elixir.
+Firecrawl has SDKs for Python, Node.js, Go, Rust, Java, Ruby, .NET, PHP, and Elixir.
 
 **Strengths:** Large community, broad SDK coverage, structured extraction with AI models, search endpoint.
 
@@ -112,7 +112,7 @@ Firecrawl has SDKs for Python, Node.js, Go, Rust, Java, and Elixir.
 
 [Spider.cloud](https://spider.cloud) is a web scraping API built on a Rust engine that focuses on speed and AI-native output. It claims processing speeds of over 100,000 pages per second.
 
-Spider returns markdown by default and supports seven output formats: markdown, HTML, JSON, JSONL, CSV, XML, and plain text. It has built-in crawl support that works without sitemaps, JavaScript rendering, and anti-bot bypass with proxy rotation.
+Spider returns markdown by default and supports multiple output formats including markdown, raw HTML, plain text, and XML. Responses can be encoded as JSON, JSONL, or CSV. It has built-in crawl support that works without sitemaps, JavaScript rendering, and anti-bot bypass with proxy rotation.
 
 What sets Spider apart is its depth of AI framework integrations. It has native connectors for [LangChain](https://python.langchain.com/docs/introduction/), LlamaIndex, CrewAI, Flowise, and AutoGen, meaning you can plug it into your existing AI pipeline with minimal setup.
 
@@ -132,7 +132,7 @@ ZenRows returns HTML by default, but you can request markdown by setting `respon
 
 The platform also includes a **Scraping Browser**, a cloud-hosted headless browser that supports Playwright and [Puppeteer](https://pptr.dev/guides/what-is-puppeteer) scripts with rotating residential proxies built in. This is useful for sites that require complex interaction before you can extract content.
 
-ZenRows does not have a dedicated crawl endpoint. You handle link discovery yourself and send individual URLs to the API.
+ZenRows does not have a built-in crawl endpoint. You can build a crawler on top of their scraping API, but you handle link discovery, URL queuing, and depth tracking yourself.
 
 **Strengths:** Best-in-class anti-bot bypass, Scraping Browser with residential proxies, MCP integration.
 
@@ -142,13 +142,13 @@ ZenRows does not have a dedicated crawl endpoint. You handle link discovery your
 
 ## 5. ScrapingBee
 
-[ScrapingBee](https://www.scrapingbee.com/documentation/) is one of the older scraping APIs, focused on handling headless browsers, proxies, and CAPTCHAs. It has been operating since 2019 and was acquired by Oxylabs in 2025.
+[ScrapingBee](https://www.scrapingbee.com/documentation/) is one of the longer-running scraping APIs, focused on handling headless browsers, proxies, and CAPTCHAs.
 
-ScrapingBee returns raw HTML. It does not have markdown output. If you are building an AI pipeline, you need to add your own HTML-to-markdown conversion step after fetching the page.
+ScrapingBee's REST API returns raw HTML. Markdown output is available through their CLI tool but not the API directly. If you are building an AI pipeline that calls the API, you need to add your own HTML-to-markdown conversion step.
 
 The API supports JavaScript rendering, rotating proxies, and data extraction via CSS selectors. It also has a dedicated Google Search scraping endpoint.
 
-ScrapingBee does not have crawl support. It is a single-page scraping API. You manage URL discovery and orchestration in your own code.
+ScrapingBee's REST API is single-page only. Crawl support is available through their CLI tool (`scrapingbee-cli`), which orchestrates multi-page crawling with depth control, URL filtering, and sitemap parsing. Each page in the crawl goes through the API and costs credits.
 
 **Strengths:** Reliable, battle-tested over 6+ years, solid proxy infrastructure.
 

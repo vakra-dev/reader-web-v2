@@ -1,0 +1,209 @@
+---
+title: "How to Scrape a Website to Markdown for LLMs"
+description: "Step-by-step guide to scraping websites and getting clean markdown output for LLMs, RAG pipelines, and AI agents. Python and JavaScript examples."
+date: 2026-07-08
+author: "Nihal Kaul"
+category: "Guides"
+keywords:
+  - "scrape website to markdown"
+  - "web scraping markdown"
+  - "llm web scraping"
+  - "web scraping for ai"
+  - "markdown for llm"
+schemaType: "howto"
+faq:
+  - question: "How do I scrape a website and get markdown output?"
+    answer: "The simplest way is to use a scraping API like Reader that returns clean markdown by default. Send a POST request with the URL, and you get back structured markdown with headings, lists, tables, and code blocks preserved. No HTML parsing needed."
+  - question: "Why is markdown better than HTML for LLMs?"
+    answer: "Markdown uses 70-90% fewer tokens than raw HTML for the same content. HTML tags, CSS classes, scripts, and navigation elements consume tokens without adding value. Markdown preserves document structure while keeping only the meaningful content."
+  - question: "Can I scrape multiple pages to markdown at once?"
+    answer: "Yes. Reader supports batch scraping (up to 1,000 URLs per request) and crawling (discover and scrape all pages on a site). Both return clean markdown for each page. You can feed the results directly into a RAG pipeline or vector database."
+  - question: "What is the best output format for feeding web data into LLMs?"
+    answer: "Markdown is the best format for LLM consumption. It preserves document structure (headings, lists, tables, code blocks) while using 70-90% fewer tokens than raw HTML. Plain text loses structure. HTML wastes tokens on tags and attributes."
+---
+
+If you are building anything with LLMs that needs web data, you have probably run into this problem: the web gives you HTML, but your model needs clean text. Raw HTML wastes most of your token budget on tags, classes, and scripts that carry no useful information.
+
+Scraping a website to markdown solves this. Markdown preserves the structure of the content (headings, lists, tables, code blocks) while stripping everything your LLM does not need. This guide covers how to do it, from quick scripts to production pipelines.
+
+## Why Markdown, Not HTML or Plain Text
+
+LLMs process text as tokens. Every character counts toward your context window and your costs. Here is how the same web page content looks across formats:
+
+| Format | Typical tokens for a blog post | What you get |
+|--------|-------------------------------|-------------|
+| Raw HTML | 8,000-12,000 | Tags, classes, scripts, nav, footer, ads, and the actual content buried somewhere in the middle |
+| Plain text | 1,200-2,000 | Content only, but no structure. Headings, lists, and tables are flattened into a wall of text |
+| Clean markdown | 1,500-2,500 | Content with structure preserved. Headings show hierarchy, lists stay as lists, code blocks keep formatting |
+
+Markdown is the sweet spot. It is 4-6x smaller than HTML while preserving the structural cues that help LLMs understand the content. For [RAG pipelines](/blog/scrape-website-to-markdown), this structure also makes chunking easier because you can split on heading boundaries instead of arbitrary character counts.
+
+## Scraping a Single Page to Markdown
+
+The fastest way to scrape a page and get markdown back is with Reader's API. One request, clean markdown output, no HTML parsing.
+
+**Python:**
+
+```python
+from reader_py import ReaderClient
+
+client = ReaderClient(api_key="rdr_your_key")
+result = client.read(url="https://docs.anthropic.com/en/docs/overview")
+
+print(result.data.markdown)
+```
+
+**JavaScript:**
+
+```javascript
+import { ReaderClient } from "@vakra-dev/reader-js";
+
+const reader = new ReaderClient({ apiKey: "rdr_your_key" });
+const result = await reader.read({
+  url: "https://docs.anthropic.com/en/docs/overview",
+});
+
+console.log(result.data.markdown);
+```
+
+The output includes headings, lists, code blocks, tables, and links, all in clean markdown. Navigation, ads, cookie banners, and footer content are stripped automatically.
+
+Reader renders the page in a headless browser before extracting content. This means JavaScript rendered pages (React, Next.js, Vue) work just as well as static HTML pages.
+
+## Scraping Multiple Pages
+
+For batch processing, pass an array of URLs. Reader scrapes them concurrently and returns markdown for each.
+
+```python
+from reader_py import ReaderClient
+
+client = ReaderClient(api_key="rdr_your_key")
+result = client.read(
+    urls=[
+        "https://docs.example.com/getting-started",
+        "https://docs.example.com/authentication",
+        "https://docs.example.com/api-reference",
+    ]
+)
+
+# Batch jobs are async, poll for results
+job = client.get_job_status(result.job_id)
+for page in job.data:
+    print(f"{page.url}: {len(page.markdown)} chars")
+```
+
+Batch requests accept up to 1,000 URLs per call. Each page is scraped independently, so a failure on one URL does not block the others.
+
+## Crawling an Entire Site to Markdown
+
+When you need every page on a site, not just specific URLs, use Reader's crawl mode. It discovers links using breadth-first search and scrapes each page it finds.
+
+```python
+from reader_py import ReaderClient
+
+client = ReaderClient(api_key="rdr_your_key")
+result = client.read(
+    url="https://docs.example.com",
+    max_depth=3,
+    max_pages=100,
+)
+
+job = client.get_job_status(result.job_id)
+for page in job.data:
+    # Save each page as a markdown file
+    filename = page.url.replace("https://", "").replace("/", "_") + ".md"
+    with open(filename, "w") as f:
+        f.write(f"# {page.metadata.title}\n\n")
+        f.write(page.markdown)
+```
+
+This is useful for building knowledge bases. Point it at a documentation site, set your depth and page limits, and get back clean markdown for every page. You can feed these files directly into a [vector database for RAG](/blog/scrape-website-to-markdown).
+
+## Feeding Markdown into LLM Pipelines
+
+Once you have markdown, you can use it in any LLM workflow. Here are two common patterns.
+
+### Direct context injection
+
+For simple use cases, paste the markdown directly into your prompt:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+# Scrape the page
+from reader_py import ReaderClient
+reader = ReaderClient(api_key="rdr_your_key")
+page = reader.read(url="https://example.com/pricing")
+
+# Use it as context
+response = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    messages=[{
+        "role": "user",
+        "content": f"Based on this page:\n\n{page.data.markdown}\n\nSummarize the pricing tiers."
+    }]
+)
+```
+
+### RAG pipeline with chunking
+
+For larger datasets, chunk the markdown and store it in a vector database:
+
+```python
+from langchain.text_splitter import MarkdownHeaderTextSplitter
+
+# Split on heading boundaries
+splitter = MarkdownHeaderTextSplitter(
+    headers_to_split_on=[
+        ("#", "h1"),
+        ("##", "h2"),
+        ("###", "h3"),
+    ]
+)
+
+chunks = splitter.split_text(page.data.markdown)
+```
+
+Markdown makes this chunking step much cleaner than splitting HTML or plain text. Each chunk preserves its heading context, so the LLM knows what section the text came from during retrieval.
+
+## The DIY Approach (and Why It Gets Complicated)
+
+You can build your own scrape-to-markdown pipeline with open-source libraries. A typical setup uses Playwright for rendering, Readability for content extraction, and Turndown for markdown conversion:
+
+```javascript
+const { chromium } = require("playwright");
+const { Readability } = require("@mozilla/readability");
+const { JSDOM } = require("jsdom");
+const TurndownService = require("turndown");
+
+const browser = await chromium.launch();
+const page = await browser.newPage();
+await page.goto("https://example.com/article");
+const html = await page.content();
+await browser.close();
+
+const dom = new JSDOM(html, { url: "https://example.com/article" });
+const article = new Readability(dom.window.document).parse();
+
+const turndown = new TurndownService();
+const markdown = turndown.turndown(article.content);
+```
+
+This works for simple cases. But in production, you will need to handle:
+
+- **Anti-bot detection.** Sites behind Cloudflare or similar services will block your headless browser. You need proxy rotation, fingerprint generation, and stealth configuration.
+- **JavaScript rendering failures.** Some SPAs crash during headless rendering. You need error recovery and fallback strategies.
+- **Content extraction accuracy.** Readability works on well-structured articles but struggles with pages that do not have a clear main content block.
+- **Conversion edge cases.** Complex tables, nested lists, and code blocks need careful handling. [Supermarkdown](https://supermarkdown.dev) was built to handle these correctly.
+- **Scale.** Managing a browser pool, queue, and retry logic for thousands of pages is significant infrastructure work.
+
+Reader handles all of these behind a single API endpoint. If you want the control of running your own pipeline, you can also [self-host the Reader engine](https://github.com/vakra-dev/reader).
+
+## Conclusion
+
+Scraping websites to markdown is the most practical way to get web content into LLM workflows. Markdown cuts token costs by 70-90% compared to raw HTML while preserving the structure that helps LLMs understand the content.
+
+Reader handles the full pipeline in one API call: rendering, content extraction, anti-bot bypass, and [markdown conversion](https://supermarkdown.dev). Check the [documentation](https://docs.reader.dev) to get started.

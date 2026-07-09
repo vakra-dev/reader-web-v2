@@ -1,0 +1,185 @@
+---
+title: "Reader vs ScrapingBee: An Honest Developer Comparison"
+description: "A detailed comparison of Reader and ScrapingBee for web scraping. Covers output formats, anti-bot, browser automation, credit systems, and AI features."
+date: 2026-07-08
+author: "Nihal Kaul"
+category: "Comparisons"
+keywords:
+  - "scrapingbee alternative"
+  - "reader vs scrapingbee"
+  - "web scraping api comparison"
+  - "scrapingbee review"
+schemaType: "article"
+faq:
+  - question: "Does ScrapingBee support markdown output?"
+    answer: "ScrapingBee's REST API returns HTML or JSON. Markdown output is available through their CLI tool via the --return-page-markdown flag, but not through the API directly. Reader returns clean markdown by default on every API response."
+  - question: "What is the difference between Reader and ScrapingBee?"
+    answer: "Reader returns clean markdown by default and includes crawl support, browser sessions via CDP, and AI extraction. ScrapingBee returns HTML and focuses on proxy infrastructure with specialized APIs for Google, Amazon, and Walmart. Reader has a simpler credit system. ScrapingBee uses multipliers up to 75x."
+  - question: "Is Reader a good ScrapingBee alternative?"
+    answer: "Yes, especially for AI developers. Reader returns markdown instead of HTML, has built-in crawl support, and offers browser sessions for Playwright and Puppeteer scripts. ScrapingBee is better if you need specialized e-commerce scraping APIs for Amazon or Walmart."
+  - question: "Does ScrapingBee have crawl support?"
+    answer: "ScrapingBee offers crawl through its CLI tool, not the REST API. The CLI handles link discovery, sitemap parsing, depth control, and URL filtering. Each page goes through the API and costs credits. Reader has crawl built into its REST API with a single POST request."
+---
+
+Reader and ScrapingBee are both web scraping APIs, but they were built for different eras of development. ScrapingBee launched in 2019 as a proxy and rendering service that returns HTML. Reader was built for AI workflows and returns clean markdown by default.
+
+This comparison covers the real differences so you can pick the right tool for what you are building.
+
+## Quick Comparison
+
+| Feature | Reader | ScrapingBee |
+|---------|--------|-------------|
+| Default output | Markdown | HTML |
+| Markdown support | Native (default) | CLI tool only |
+| Crawl support | Yes (REST API) | CLI tool only |
+| Browser sessions | CDP WebSocket (Playwright/Puppeteer) | No |
+| JavaScript rendering | Included | 5x credit cost |
+| Anti-bot bypass | Fingerprint generation + tiered proxies | Proxy rotation + stealth mode |
+| AI extraction | JSON Schema + natural language | AI extraction via natural language |
+| Specialized APIs | No | Google, Amazon, Walmart, YouTube |
+| SDKs | JavaScript, Python, CLI | JavaScript, Python |
+| Self-hostable | Yes | No |
+
+## Output Format: The Core Difference
+
+This is the biggest difference between the two tools. ScrapingBee's REST API returns raw HTML. Markdown is available through their CLI tool but not the API. Reader returns clean markdown by default on every API response.
+
+If you are building a traditional scraping pipeline where you parse HTML yourself with BeautifulSoup or Cheerio, ScrapingBee gives you what you need. But if you are feeding content into LLMs, building [RAG pipelines](/blog/scrape-website-to-markdown), or doing anything with AI, raw HTML adds unnecessary complexity.
+
+Raw HTML from a typical web page contains 5-10x more tokens than the actual content. Navigation bars, CSS classes, script tags, and data attributes all consume tokens without adding value. Reader's markdown output strips all of this while preserving the document structure.
+
+**Reader returns this:**
+
+```markdown
+## Getting Started
+
+Install the SDK with npm:
+
+\`\`\`bash
+npm install @vakra-dev/reader-js
+\`\`\`
+
+Then create a client and scrape any URL.
+```
+
+**ScrapingBee returns this:**
+
+```html
+<div class="docs-content prose prose-lg mx-auto mt-8">
+  <h2 id="getting-started" class="text-2xl font-bold mt-12 mb-4">
+    <a href="#getting-started" class="anchor">Getting Started</a>
+  </h2>
+  <p class="mb-4">Install the SDK with npm:</p>
+  <div class="code-block rounded-lg bg-gray-900 p-4 my-4">
+    <pre><code class="language-bash hljs">npm install @vakra-dev/reader-js</code></pre>
+  </div>
+  <p class="mb-4">Then create a client and scrape any URL.</p>
+</div>
+```
+
+The markdown version is 4-6x fewer tokens. For the same content. If you are processing hundreds of pages in an AI pipeline, this difference compounds.
+
+## Crawling
+
+Reader supports crawling entire websites. Set a starting URL, a depth limit, and a page limit, and Reader discovers links and scrapes each page.
+
+```python
+from reader_py import ReaderClient
+
+client = ReaderClient(api_key="rdr_your_key")
+result = client.read(
+    url="https://docs.example.com",
+    max_depth=3,
+    max_pages=50,
+)
+```
+
+ScrapingBee's REST API is single-page only. They offer crawl through their CLI tool (`scrapingbee-cli`), which handles link discovery, sitemap parsing, depth control, and URL filtering. The CLI orchestrates requests client-side, with each page going through the API and costing credits.
+
+Reader has crawl built into the REST API. A single POST request starts an async crawl job with depth and page limits. No CLI tool or client-side orchestration needed.
+
+For building knowledge bases, indexing documentation, or any use case where you need content from an entire site, Reader's API-level crawl is simpler to integrate into automated pipelines.
+
+## Browser Automation
+
+Reader provides cloud browser sessions over the Chrome DevTools Protocol. You create a session and connect with Playwright or Puppeteer. The browser runs with stealth configuration and proxies already set up.
+
+```javascript
+import { ReaderClient } from "@vakra-dev/reader-js";
+import { chromium } from "playwright";
+
+const reader = new ReaderClient({ apiKey: "rdr_your_key" });
+const session = await reader.createSession({ duration: 300 });
+
+const browser = await chromium.connectOverCDP(session.cdpUrl);
+const page = browser.contexts()[0].pages()[0];
+await page.goto("https://example.com/dashboard");
+```
+
+ScrapingBee supports JavaScript execution on pages via its `js_scenario` parameter (click, scroll, wait, fill forms), but it does not provide direct browser sessions. You cannot connect Playwright or Puppeteer to it.
+
+If you have existing browser automation code, Reader lets you run it in the cloud without changes. If you just need to click a button or scroll before scraping, ScrapingBee's `js_scenario` works for simpler interactions.
+
+## Anti-Bot and Proxies
+
+Both tools handle anti-bot detection, but they approach it differently.
+
+**Reader** uses browser fingerprint generation with tiered proxy escalation. Standard mode routes through dedicated ISP proxies. Premium mode adds residential proxies for heavily protected sites. The anti-bot handling is transparent: you pick a mode and Reader handles the rest.
+
+**ScrapingBee** offers multiple proxy tiers with credit multipliers. Standard datacenter proxies cost 1 credit. Premium residential proxies cost 10 credits. Stealth mode, which combines multiple techniques for the most protected sites, costs up to 75 credits per request.
+
+For most sites, both tools work. For heavily protected sites (Cloudflare with Turnstile, DataDome, Akamai), [specialized anti-bot tools like ZenRows](/blog/reader-vs-zenrows) have deeper coverage than either Reader or ScrapingBee.
+
+## Specialized APIs
+
+ScrapingBee has an advantage here. It offers dedicated APIs for Google Search, Amazon (product + search), Walmart (product + search), and YouTube. These return structured data specific to each platform.
+
+Reader does not have site-specific APIs. It uses a unified endpoint that works with any URL. You can use Reader's extract feature with a JSON schema to get structured data from any page, but there are no pre-built templates for specific sites.
+
+If you primarily scrape Amazon products or Google search results, ScrapingBee's specialized APIs save you from writing extraction logic.
+
+## AI Extraction
+
+Both tools support AI-powered data extraction, but they work differently.
+
+**Reader** lets you pass a JSON schema or natural language prompt alongside a scrape request. It returns structured data matching your schema, extracted from the page content.
+
+```python
+result = client.read(
+    url="https://example.com/product",
+    extract={
+        "schema": {
+            "name": "string",
+            "features": "string[]",
+            "has_free_tier": "boolean",
+        }
+    }
+)
+```
+
+**ScrapingBee** offers AI extraction via its `ai_extract_rules` parameter, where you describe what to extract in natural language.
+
+Both approaches work. Reader's schema-based extraction gives you more control over the output structure. ScrapingBee's natural language approach is simpler for ad-hoc extraction.
+
+## When to Use Reader
+
+Reader is the better choice when:
+
+- **You need markdown output.** For LLM applications, [RAG pipelines](/blog/scrape-website-to-markdown), or any AI workflow where token efficiency matters.
+- **You need to crawl websites.** Indexing documentation, building knowledge bases, or [scraping entire sites to markdown](/blog/scrape-website-to-markdown).
+- **You need browser sessions.** Running existing Playwright or Puppeteer code in the cloud.
+- **You want to self-host.** Reader can run on your own infrastructure.
+
+## When to Use ScrapingBee
+
+ScrapingBee is the better choice when:
+
+- **You need HTML output.** If you have an existing parsing pipeline built around BeautifulSoup or Cheerio.
+- **You scrape Amazon, Walmart, or Google.** The specialized APIs return structured data without writing extractors.
+- **You want a mature, battle-tested service.** ScrapingBee has been operating since 2019 with a proven track record.
+
+## Conclusion
+
+The core question is what format you need. If you are building AI applications and need clean markdown, Reader was built for that workflow. If you need raw HTML for a traditional scraping pipeline or access to specialized e-commerce APIs, ScrapingBee is a solid choice.
+
+Check the [Reader documentation](https://docs.reader.dev) or the [ScrapingBee documentation](https://www.scrapingbee.com/documentation/) to get started.

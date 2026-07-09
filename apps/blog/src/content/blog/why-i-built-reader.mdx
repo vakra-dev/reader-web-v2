@@ -5,11 +5,24 @@ date: 2026-02-14
 author: "Nihal Kaul"
 category: "Product"
 keywords:
-  ["web scraping", "AI agents", "LLM", "web data", "Reader", "open source"]
+  - "web scraping"
+  - "AI agents"
+  - "LLM"
+  - "web data"
+  - "Reader"
+  - "open source"
+schemaType: "article"
+faq:
+  - question: "What is Reader?"
+    answer: "Reader is an open-source web scraping platform built for AI. It converts any webpage into clean markdown using two primitives: scrape for single URLs and crawl for entire websites. It handles JavaScript rendering, anti-bot bypass, and content extraction automatically."
+  - question: "Is Reader free to use?"
+    answer: "Reader is open-source and free to self-host. The managed API at reader.dev offers a free tier with 1,000 credits per month. The engine, SDKs, and CLI are all available on GitHub."
+  - question: "What programming languages does Reader support?"
+    answer: "Reader has official SDKs for JavaScript and Python, plus a CLI tool. The API works with any language that can make HTTP requests. The scraping engine itself is built on Node.js with a Rust-based markdown converter."
 draft: false
 ---
 
-The web wasn't built for machines to read. It was built for humans, with all the complexity that entails.
+Web scraping for AI should not require weeks of infrastructure work. But if you have built anything with LLMs that needs web data, you know it does.
 
 I learned this the hard way.
 

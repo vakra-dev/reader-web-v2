@@ -1,0 +1,217 @@
+---
+title: "Introducing Supermarkdown: HTML to Markdown in Rust"
+description: "Supermarkdown is a Rust library that converts HTML to clean markdown. Built for speed, correctness, and the edge cases real web pages throw at you."
+date: 2026-07-08
+author: "Nihal Kaul"
+category: "Product"
+keywords:
+  - "supermarkdown"
+  - "html to markdown"
+  - "html to markdown rust"
+  - "rust markdown converter"
+  - "supermarkdown.dev"
+schemaType: "article"
+faq:
+  - question: "What is Supermarkdown?"
+    answer: "Supermarkdown is an open-source Rust library that converts HTML to clean markdown. It uses a three-pass O(n) algorithm with pre-computed metadata for speed, and html5ever (a browser-grade HTML5 spec parser from the Servo project) for error recovery. Available as a Rust crate, npm package, and CLI tool."
+  - question: "How fast is Supermarkdown compared to Turndown.js?"
+    answer: "Supermarkdown processes HTML to markdown roughly 10-50x faster than Turndown.js. A typical 10KB web page converts in under 1ms. This speed comes from Rust's native performance, O(n) algorithm complexity, and zero garbage collection overhead."
+  - question: "Can I use Supermarkdown in Node.js?"
+    answer: "Yes. Supermarkdown publishes pre-built native binaries for Node.js via napi-rs. Install it with npm install @vakra-dev/supermarkdown. It provides both synchronous convert() and asynchronous convertAsync() functions with full TypeScript types."
+  - question: "How does Supermarkdown handle malformed HTML?"
+    answer: "Supermarkdown uses html5ever, the HTML5 spec-compliant parser from the Servo project. It implements the same parsing algorithm that browsers use, handling unclosed tags, mismatched nesting, and invalid attributes gracefully. This produces clean output from messy real-world HTML."
+---
+
+We built [Supermarkdown](https://supermarkdown.dev) because existing HTML-to-markdown converters were not good enough for what we needed. Reader processes thousands of web pages every day, and the conversion step has to be fast, correct, and resilient to whatever HTML the web throws at it.
+
+Turndown.js is the most popular option in this space, and it works well for clean HTML fragments. But at scale, we kept running into problems: broken output on complex tables, incorrect indentation on nested lists, over-escaped characters, and performance that slowed down on large documents.
+
+So we built our own converter in Rust. This is what it does and how it works.
+
+## What Supermarkdown Does
+
+Supermarkdown converts HTML to clean GitHub Flavored Markdown. You give it an HTML string, and it returns markdown with headings, lists, tables, code blocks, links, images, and formatting preserved.
+
+**Node.js:**
+
+```javascript
+import { convert } from "@vakra-dev/supermarkdown";
+
+const markdown = convert(`
+  <h1>API Reference</h1>
+  <p>Send a <code>POST</code> request to create a new resource.</p>
+  <table>
+    <tr><th>Field</th><th align="center">Required</th><th>Type</th></tr>
+    <tr><td>name</td><td align="center">Yes</td><td>string</td></tr>
+    <tr><td>email</td><td align="center">No</td><td>string</td></tr>
+  </table>
+`);
+```
+
+Output:
+
+```markdown
+# API Reference
+
+Send a `POST` request to create a new resource.
+
+| Field | Required | Type |
+| --- | :---: | --- |
+| name | Yes | string |
+| email | No | string |
+```
+
+Notice the center-aligned "Required" column. Supermarkdown reads `align` attributes and `text-align` CSS styles on table cells and produces the correct GFM alignment syntax. Most converters miss this.
+
+**Rust:**
+
+```rust
+use supermarkdown::{convert, Options};
+
+let html = "<h1>Hello</h1><p><strong>World</strong></p>";
+let markdown = convert(html, &Options::default());
+// "# Hello\n\n**World**"
+```
+
+**CLI:**
+
+```bash
+# Convert a file
+supermarkdown page.html > output.md
+
+# Pipe from curl
+curl -s https://example.com | supermarkdown
+
+# Exclude elements
+supermarkdown --exclude "nav,footer,.sidebar" page.html
+```
+
+## Why Rust
+
+JavaScript HTML-to-markdown converters hit a performance ceiling on large documents. A 100KB HTML page (common for documentation sites and Wikipedia articles) can take 50-200ms in Turndown. That adds up when you are processing thousands of pages in a pipeline.
+
+Rust eliminates three sources of overhead:
+
+**No garbage collector.** JavaScript's GC pauses during large string operations. Rust's ownership system deallocates memory deterministically, producing consistent sub-millisecond latency regardless of document size.
+
+**Native string handling.** JavaScript strings are UTF-16 internally, which means constant encoding and decoding when working with UTF-8 web content. Rust strings are UTF-8 natively, matching the encoding of HTML documents.
+
+**Compiled to machine code.** No interpreter startup, no JIT warmup. The conversion loop runs at native speed from the first call.
+
+The result: Supermarkdown converts a typical 10KB web page in under 1ms. A 100KB page takes under 5ms. That is roughly 10-50x faster than Turndown.js on the same input.
+
+## How It Works: Three Passes, O(n)
+
+Most HTML-to-markdown converters have a hidden performance problem with nested lists. To figure out the indentation for a list item, they walk up the DOM tree to count ancestor list elements. For a document with many list items, this turns the algorithm into O(n²).
+
+Supermarkdown avoids this with a pre-computation pass. The full pipeline is three linear passes over the document:
+
+**Pass 1: Parse.** HTML is parsed using [html5ever](https://github.com/servo/html5ever), the HTML5 spec-compliant parser from the Servo project. It implements the same parsing algorithm that browsers use, handling malformed HTML (unclosed tags, mismatched nesting, duplicate attributes) gracefully.
+
+**Pass 2: Precompute.** A single depth-first traversal computes all node metadata and stores it in a hash map. For each node, this includes the list prefix (`-`, `1.`, etc.), the total indentation from ancestor list elements, and any skip/keep flags from CSS selectors. After this pass, every conversion decision is an O(1) lookup.
+
+**Pass 3: Convert.** A second depth-first traversal applies conversion rules to each node. Each rule (headings, paragraphs, lists, tables, code blocks, etc.) looks up pre-computed metadata instead of traversing ancestors. The results are written to a string builder with minimal allocations.
+
+A final cleanup step collapses extra newlines, trims trailing whitespace, and optionally converts inline links to reference-style links.
+
+## What It Handles That Others Miss
+
+### Table alignment
+
+Supermarkdown reads the `align` attribute on `<th>` and `<td>` elements, and also checks for `text-align` in inline styles. It produces correct GFM alignment syntax: `:---` for left, `:---:` for center, `---:` for right.
+
+### Code language detection
+
+When converting `<pre><code>` blocks, Supermarkdown checks multiple class naming patterns to identify the programming language: `language-python`, `lang-go`, `highlight-typescript`, `hljs-rust`, and bare known language names. It also strips line number gutter elements that syntax highlighting libraries inject (`.gutter`, `.lineno`, `.line-number`).
+
+### Dynamic fence calculation
+
+If a code block contains triple backticks, most converters produce broken output. Supermarkdown counts the longest backtick sequence in the content and uses a fence one backtick longer.
+
+### Ordered list start values
+
+HTML supports `<ol start="5">`. Supermarkdown respects this and starts the numbering at the correct value instead of always starting at 1.
+
+### CSS selector filtering
+
+You can pass `excludeSelectors` and `includeSelectors` to filter elements during conversion. This lets you strip navigation, sidebars, or ad containers without a separate content extraction step.
+
+```javascript
+const markdown = convert(html, {
+  excludeSelectors: ["nav", "footer", ".cookie-banner", "#sidebar"],
+  includeSelectors: [".article-content"],
+});
+```
+
+### URL handling
+
+Spaces and parentheses in URLs are percent-encoded. Relative URLs are resolved against a configurable `baseUrl`. Base64 data URIs in images are skipped since they have no meaningful markdown representation.
+
+## Using Supermarkdown in Your Project
+
+### Node.js (npm)
+
+```bash
+npm install @vakra-dev/supermarkdown
+```
+
+Supermarkdown ships pre-built native binaries for Linux (x86_64, ARM64), macOS (Intel, Apple Silicon), and Windows. No Rust toolchain needed.
+
+```javascript
+import { convert, convertAsync } from "@vakra-dev/supermarkdown";
+
+// Synchronous (fast, blocks event loop briefly)
+const md = convert(html);
+
+// Asynchronous (offloads to thread pool, better for large docs)
+const md = await convertAsync(largeHtml);
+```
+
+The `convertAsync` function uses a Tokio thread pool to avoid blocking the Node.js event loop on large documents. For most pages under 100KB, the synchronous `convert` is fine.
+
+### Rust (crates.io)
+
+```bash
+cargo add supermarkdown
+```
+
+```rust
+use supermarkdown::{convert_with_options, Options, HeadingStyle, LinkStyle};
+
+let options = Options {
+    heading_style: HeadingStyle::Atx,
+    bullet_marker: '-',
+    code_fence: '`',
+    link_style: LinkStyle::Inline,
+    base_url: Some("https://example.com".to_string()),
+    exclude_selectors: vec!["nav".to_string(), "footer".to_string()],
+    include_selectors: vec![],
+};
+
+let markdown = convert_with_options(html, &options);
+```
+
+### CLI
+
+```bash
+cargo install supermarkdown-cli
+```
+
+The CLI reads from a file or stdin and writes markdown to stdout.
+
+## Supermarkdown and Reader
+
+Supermarkdown powers the markdown conversion in [Reader](https://reader.dev). When you call Reader's API, the pipeline is:
+
+1. Playwright renders the page in a headless browser
+2. Anti-bot bypass handles Cloudflare, CAPTCHAs, and fingerprint checks
+3. Content extraction strips navigation, ads, and boilerplate
+4. **Supermarkdown converts the cleaned HTML to markdown**
+
+You can use Supermarkdown standalone if you already have HTML and just need the conversion. If you need the full pipeline (fetching, rendering, anti-bot, extraction, and conversion), [Reader's API](/blog/best-web-scraping-api) handles it in one call.
+
+## Conclusion
+
+Supermarkdown is what we needed for Reader and could not find elsewhere: a fast, correct HTML-to-markdown converter that handles real web pages. It is open source and available as a [Rust crate](https://crates.io/crates/supermarkdown), [npm package](https://www.npmjs.com/package/@vakra-dev/supermarkdown), and CLI tool.
+
+Check [supermarkdown.dev](https://supermarkdown.dev) for the full documentation, or explore the source on [GitHub](https://github.com/vakra-dev/supermarkdown).

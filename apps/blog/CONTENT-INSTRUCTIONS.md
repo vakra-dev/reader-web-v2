@@ -29,7 +29,7 @@ Rules for writing blog articles on reader.dev/blog. Reference this file before w
 - No competitor bashing. State facts, let the reader decide.
 - No superlatives without evidence. "Fastest" needs a benchmark. "Best" needs criteria.
 - Show, don't tell. A 4-line code example is worth more than a paragraph of description.
-- Always verify external tool features and APIs by checking their current documentation before writing about them.
+- Always verify external tool features and APIs by checking their current documentation before writing about them. Never claim a competitor lacks a feature without checking their docs, blog, CLI docs, and changelog. Getting this wrong damages credibility and SEO trust.
 
 ## Article Outline (Required Before Writing)
 
@@ -77,6 +77,8 @@ faq:
 | Reader section | 200-300 | Natural transition from problem to Reader's solution. Working code example. Not a pitch. |
 | FAQ | 150-250 | 3-4 PAA-targeted questions. Short direct answers. |
 | Conclusion | 80-120 | Recap + single CTA to docs or GitHub. |
+
+**Important:** Do NOT add a `## Frequently Asked Questions` heading in the article body. The FAQ section is auto-rendered from the frontmatter `faq` array by the PostLayout component. Adding the heading manually creates a duplicate.
 
 ### Word Count
 

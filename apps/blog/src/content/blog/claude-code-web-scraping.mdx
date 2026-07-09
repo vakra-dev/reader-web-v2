@@ -1,0 +1,139 @@
+---
+title: "Add Web Scraping to Claude Code with Reader"
+description: "Give Claude Code the ability to scrape websites, crawl domains, and extract data using Reader's MCP server. Setup guide with practical examples."
+date: 2026-07-08
+author: "Nihal Kaul"
+category: "Ecosystem"
+keywords:
+  - "claude code web scraping"
+  - "claude code mcp"
+  - "claude code reader"
+  - "ai coding web data"
+schemaType: "howto"
+faq:
+  - question: "Can Claude Code scrape websites?"
+    answer: "Not by default. Claude Code reads your codebase and runs local commands but cannot access the web. By adding Reader's MCP server, you give Claude Code the ability to scrape any URL, crawl entire sites, and extract structured data."
+  - question: "How do I add web scraping to Claude Code?"
+    answer: "Run 'claude mcp add --env READER_API_KEY=rdr_your_key reader -- npx -y @vakra-dev/reader-mcp' in your terminal. This installs Reader's MCP server and gives Claude Code eight web scraping tools."
+  - question: "What can I do with web scraping in Claude Code?"
+    answer: "You can ask Claude to scrape documentation for context, crawl a competitor's site for analysis, extract structured data from product pages, research topics using live web data, and create browser sessions for interactive automation."
+  - question: "Is Reader's MCP server free to use?"
+    answer: "Reader offers a free tier with 1,000 credits per month, enough for hundreds of scrape requests. Get an API key at console.reader.dev. The MCP server runs locally on your machine and connects to Reader's API."
+---
+
+Claude Code is an AI coding tool that reads your codebase, edits files, runs commands, and creates commits. But out of the box, it cannot access the web. It does not know what is on a competitor's landing page, what a documentation site says, or what data a product page contains.
+
+Adding Reader's MCP server fixes this. One command gives Claude Code eight tools for scraping, crawling, extracting, and browsing the web. Every response comes back as clean markdown that Claude can reason about directly.
+
+## Setup (One Command)
+
+```bash
+claude mcp add --env READER_API_KEY=rdr_your_key reader \
+  -- npx -y @vakra-dev/reader-mcp
+```
+
+Replace `rdr_your_key` with your API key from [console.reader.dev](https://console.reader.dev). The free tier includes 1,000 credits per month.
+
+That is it. Claude Code now has access to these tools:
+
+| Tool | What It Does |
+|------|-------------|
+| `reader_scrape` | Scrape any URL, return clean markdown |
+| `reader_batch_scrape` | Scrape multiple URLs as an async job |
+| `reader_crawl` | Crawl a site with depth and page limits |
+| `reader_discover` | Discover URLs on a site without scraping |
+| `reader_extract` | Extract structured data via JSON schema |
+| `reader_job_status` | Check async job progress |
+| `reader_session_create` | Create a CDP browser session |
+| `reader_credits` | Check usage and balance |
+
+Verify the setup by running `/mcp` inside a Claude Code session. You should see "reader" listed as a connected server.
+
+## What You Can Do With It
+
+### Use documentation as context
+
+Instead of copying documentation into your prompt, ask Claude to fetch it:
+
+> "Scrape the Stripe API documentation for webhooks and show me how to verify webhook signatures in Node.js"
+
+Claude calls `reader_scrape` on the Stripe docs URL, gets back clean markdown with code examples, and uses it to write accurate, up-to-date code. No hallucination from stale training data.
+
+### Research before coding
+
+Before building a feature, get context from the real web:
+
+> "Scrape the top 3 results for 'JWT authentication best practices' and summarize the consensus approach"
+
+Claude researches the topic using live web data, then applies what it learned to your codebase. This is especially useful for topics that have changed since Claude's training cutoff.
+
+### Index a documentation site
+
+Build a local reference from any docs site:
+
+> "Crawl docs.example.com (max 50 pages, depth 3) and save each page as a markdown file in ./reference/"
+
+Claude calls `reader_crawl`, polls for completion, and writes each page as a clean markdown file. You now have a searchable local copy of the documentation.
+
+### Extract structured data
+
+Pull specific fields from web pages:
+
+> "Go to this product page and extract the name, description, key features, and technical specifications as JSON"
+
+Claude calls `reader_extract` with a schema and returns structured data you can use directly in code.
+
+### Competitive analysis
+
+Analyze competitor websites from your terminal:
+
+> "Scrape the landing pages of our top 3 competitors and compare their feature lists, positioning, and CTAs"
+
+Claude scrapes each URL, gets clean markdown without ads and navigation, and produces a structured comparison.
+
+### Monitor for changes
+
+Track changes on important pages:
+
+> "Scrape our pricing page and compare it with the version from last week that I saved in ./snapshots/"
+
+Claude fetches the current version and diffs it against your saved copy.
+
+## How It Works Under the Hood
+
+When you ask Claude to scrape a page, this is what happens:
+
+1. Claude recognizes it needs web data and calls the `reader_scrape` tool
+2. The MCP server (running locally on your machine) sends an API request to Reader
+3. Reader renders the page in a headless browser, bypasses anti-bot protection, extracts main content, and converts it to markdown using [Supermarkdown](https://supermarkdown.dev)
+4. The markdown is returned to Claude through the MCP connection
+5. Claude uses the markdown as context for its response
+
+The MCP server runs as a local stdio process. Your API key is stored in your local environment and never shared with Claude's cloud service. The web requests go through Reader's API, not through Claude.
+
+## Tips for Better Results
+
+**Be specific about what you want extracted.** Instead of "scrape this page," say "scrape this page and extract the API endpoints, their HTTP methods, and required parameters."
+
+**Use crawl for sites, scrape for pages.** If you need content from a single URL, use scrape. If you need content from an entire site (like documentation), use crawl with depth and page limits.
+
+**Combine with file operations.** Claude can scrape content and immediately write it to files, create code based on it, or compare it with existing files in your project.
+
+**Check your credits.** Ask Claude "check my Reader credits" to see your usage and balance before running large crawl jobs.
+
+## Comparison with Other Approaches
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| Reader MCP | Clean markdown, anti-bot, crawl, sessions | Requires API key |
+| [Fetch MCP](/blog/best-mcp-servers-web-scraping) (reference) | Free, no API key, built-in | No JavaScript rendering, no anti-bot |
+| Manual copy-paste | No setup | Slow, no formatting, limited context |
+| WebSearch tool | Quick answers | No full-page content, no crawling |
+
+The Fetch MCP server (included in the official MCP repository) is a free alternative for basic URL fetching. It converts HTML to markdown but does not render JavaScript or bypass anti-bot protection. For protected sites or JavaScript rendered pages, Reader's MCP server handles these automatically.
+
+## Conclusion
+
+Claude Code with Reader's MCP server turns your terminal into a web-aware AI coding environment. One command to set up, eight tools for scraping, crawling, extracting, and browsing. Every response is clean markdown that Claude can reason about.
+
+Get your API key at [console.reader.dev](https://console.reader.dev) and set it up in one command. Check the [Reader documentation](https://docs.reader.dev) for the full API reference.
