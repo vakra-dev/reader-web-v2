@@ -1,0 +1,59 @@
+---
+interface Props {
+  currentPage: number
+  totalPages: number
+}
+
+const { currentPage, totalPages } = Astro.props
+
+function pageUrl(page: number) {
+  if (page === 1) return '/blog'
+  return `/blog/page/${page}`
+}
+---
+
+{totalPages > 1 && (
+  <nav class="mt-16 flex items-center justify-between border-t border-gray-200 pt-6" aria-label="Pagination">
+    <div>
+      {currentPage > 1 ? (
+        <a
+          href={pageUrl(currentPage - 1)}
+          class="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          &larr; Previous
+        </a>
+      ) : (
+        <span class="text-sm text-gray-300">&larr; Previous</span>
+      )}
+    </div>
+
+    <div class="flex items-center gap-2">
+      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+        <a
+          href={pageUrl(page)}
+          class={`px-3 py-1 text-sm rounded transition-colors ${
+            page === currentPage
+              ? 'bg-gray-900 text-white'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+          aria-current={page === currentPage ? 'page' : undefined}
+        >
+          {page}
+        </a>
+      ))}
+    </div>
+
+    <div>
+      {currentPage < totalPages ? (
+        <a
+          href={pageUrl(currentPage + 1)}
+          class="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          Next &rarr;
+        </a>
+      ) : (
+        <span class="text-sm text-gray-300">Next &rarr;</span>
+      )}
+    </div>
+  </nav>
+)}

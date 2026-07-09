@@ -1,0 +1,57 @@
+# Reader
+
+> The open-source web infrastructure platform for AI. Scrape, crawl, and automate the web from a single API.
+
+Reader converts any webpage into clean, LLM-ready markdown. Open-source (Apache 2.0), self-hostable.
+
+## Core Primitives
+
+- Read: Convert any URL to clean markdown via API or SDK
+- Crawl: BFS crawl entire websites to markdown with depth/page limits
+- Browse: CDP cloud browser sessions for AI agents (Playwright/Puppeteer compatible)
+- Extract: Structured data extraction with LLMs (coming soon)
+
+## Quick Start
+
+API:
+  curl https://api.reader.dev/v1/read \
+    -H "Authorization: Bearer rdr_YOUR_KEY" \
+    -d '{"urls": ["https://example.com"]}'
+
+JavaScript:
+  npm install @vakra-dev/reader-js
+
+Python:
+  pip install reader-py
+
+CLI:
+  npx @vakra-dev/reader-cli scrape https://example.com
+
+Self-hosted:
+  docker pull ghcr.io/vakra-dev/reader
+
+## Key Links
+
+- Website: https://reader.dev
+- API: https://api.reader.dev
+- Console: https://console.reader.dev
+- Documentation: https://docs.reader.dev
+- API Reference: https://docs.reader.dev/api-reference
+- GitHub: https://github.com/vakra-dev/reader
+- Blog: https://reader.dev/blog
+- Free Markdown API: https://md.reader.dev
+
+## Packages
+
+- @vakra-dev/reader (npm) - Core engine
+- @vakra-dev/reader-js (npm) - JavaScript SDK
+- @vakra-dev/reader-cli (npm) - CLI tool
+- reader-py (PyPI) - Python SDK
+
+## Technology
+
+- Engine: Playwright with fingerprint-generator for stealth browsing
+- Markdown: Supermarkdown (Rust HTML-to-markdown engine with NAPI bindings)
+- Infrastructure: Docker containers with Caddy load balancer
+- Proxy: Tiered proxy support (standard ISP + premium residential)
+- Anti-detection: fingerprint-generator + proxy-chain + headless=new

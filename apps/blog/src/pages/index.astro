@@ -3,18 +3,17 @@ import { getCollection } from 'astro:content'
 import BaseLayout from '../layouts/BaseLayout.astro'
 import Header from '../components/Header.astro'
 import Footer from '../components/Footer.astro'
+import Pagination from '../components/Pagination.astro'
+import PostCard from '../components/PostCard.astro'
 
-const posts = (await getCollection('blog'))
+const POSTS_PER_PAGE = 12
+
+const allPosts = (await getCollection('blog'))
   .filter((post) => !post.data.draft)
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
 
-const formatDate = (date: Date) => {
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
+const posts = allPosts.slice(0, POSTS_PER_PAGE)
+const totalPages = Math.ceil(allPosts.length / POSTS_PER_PAGE)
 ---
 
 <BaseLayout
@@ -23,33 +22,49 @@ const formatDate = (date: Date) => {
 >
   <Header />
 
-  <main class="flex-1 max-w-2xl mx-auto px-4 pt-32 pb-16 w-full">
-    <h1 class="text-3xl font-bold text-gray-900 mb-12">Blog</h1>
-
-    <div class="space-y-12">
-      {posts.map((post) => (
-        <article>
-          <a href={`/blog/${post.slug}/`} class="block group">
-            <h2 class="text-3xl font-bold text-gray-900 group-hover:text-black mb-2">
-              {post.data.title}
-            </h2>
-            <div class="flex items-center gap-4 text-sm text-gray-500 mb-3">
-              <time datetime={post.data.date.toISOString()}>
-                {formatDate(post.data.date)}
-              </time>
-              <span>{post.data.author}</span>
-            </div>
-            <p class="text-gray-600 leading-relaxed">
-              {post.data.description}
-            </p>
-          </a>
-        </article>
-      ))}
+  <main class="flex-1 max-w-6xl mx-auto px-6 pt-32 pb-16 w-full">
+    {/* Hero */}
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-bold text-gray-900 mb-3">Reader Blog</h1>
+      <p class="text-gray-500 text-lg">
+        Guides, tutorials, and deep dives on web scraping, AI agents, and building with Reader.
+      </p>
     </div>
 
-    {posts.length === 0 && (
-      <p class="text-gray-500">No posts yet. Check back soon!</p>
+    {/* Post Grid */}
+    {posts.length > 0 ? (
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {posts.map((post) => (
+          <PostCard post={post} />
+        ))}
+      </div>
+    ) : (
+      <p class="text-gray-500 text-center">No posts yet. Check back soon!</p>
     )}
+
+    <Pagination currentPage={1} totalPages={totalPages} />
+
+    {/* Bottom CTA */}
+    <div class="mt-16 text-center bg-[#0D9373] rounded-xl py-12 px-6">
+      <h2 class="text-2xl font-bold text-white mb-3">Start scraping in minutes</h2>
+      <p class="text-emerald-100 mb-6">Clean markdown from any URL. One API call.</p>
+      <div class="flex items-center justify-center gap-4">
+        <a
+          href="https://docs.reader.dev"
+          class="px-5 py-2.5 bg-white text-[#0D9373] text-sm font-medium rounded-lg hover:bg-emerald-50 transition-colors"
+        >
+          Read the Docs
+        </a>
+        <a
+          href="https://github.com/vakra-dev/reader"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="px-5 py-2.5 border border-emerald-300 text-white text-sm font-medium rounded-lg hover:bg-[#0a7d62] transition-colors"
+        >
+          View on GitHub
+        </a>
+      </div>
+    </div>
   </main>
 
   <Footer />

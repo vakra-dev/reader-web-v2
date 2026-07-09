@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import PlausibleProvider from "next-plausible";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -47,6 +48,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <PlausibleProvider domain="reader.dev" />
+      </head>
       <body className="min-h-screen flex flex-col antialiased bg-page">
         {children}
       </body>

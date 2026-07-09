@@ -1,9 +1,9 @@
 import { defineConfig } from "astro/config";
 import mdx from "@astrojs/mdx";
 import tailwind from "@astrojs/tailwind";
-
-// Note: @astrojs/sitemap removed temporarily due to version incompatibility
-// with astro@4.x. Re-add when upgrading to astro@5.x or pinning a compatible version.
+import sitemap from "@astrojs/sitemap";
+import pagefind from "astro-pagefind";
+import rehypeAutolinkHeadings from "rehype-autolink-headings";
 
 export default defineConfig({
   site: "https://reader.dev",
@@ -12,6 +12,8 @@ export default defineConfig({
   integrations: [
     mdx(),
     tailwind(),
+    sitemap(),
+    pagefind(),
   ],
 
   output: "static",
@@ -21,6 +23,9 @@ export default defineConfig({
       theme: "github-dark",
       wrap: true,
     },
+    rehypePlugins: [
+      [rehypeAutolinkHeadings, { behavior: "wrap" }],
+    ],
   },
 
   trailingSlash: "ignore",

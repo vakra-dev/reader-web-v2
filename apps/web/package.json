@@ -22,7 +22,8 @@
     "tailwindcss-animate": "^1.0.7",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.462.0",
-    "sonner": "^1.7.4"
+    "sonner": "^1.7.4",
+    "next-plausible": "^3.12.0"
   },
   "devDependencies": {
     "@reader/tailwind-config": "workspace:*",

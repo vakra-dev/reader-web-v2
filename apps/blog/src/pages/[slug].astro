@@ -1,5 +1,5 @@
 ---
-import { getCollection } from 'astro:content'
+import { getCollection, render } from 'astro:content'
 import PostLayout from '../layouts/PostLayout.astro'
 
 export async function getStaticPaths() {
@@ -7,15 +7,19 @@ export async function getStaticPaths() {
   return posts
     .filter((post) => !post.data.draft)
     .map((post) => ({
-      params: { slug: post.slug },
+      params: { slug: post.id },
       props: { post },
     }))
 }
 
 const { post } = Astro.props
-const { Content } = await post.render()
+const { Content, headings } = await render(post)
+
+const allPosts = (await getCollection('blog'))
+  .filter((p) => !p.data.draft)
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
 ---
 
-<PostLayout post={post}>
+<PostLayout post={post} headings={headings} allPosts={allPosts}>
   <Content />
 </PostLayout>

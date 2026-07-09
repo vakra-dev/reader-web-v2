@@ -1,0 +1,46 @@
+# Reader Blog
+
+> Technical articles about web data extraction, AI agents, and building with Reader -- the open-source web infrastructure platform for AI.
+
+Reader is an open-source (Apache 2.0) web scraping platform that converts any webpage into clean, LLM-ready markdown.
+
+## Core Primitives
+
+- Read: Convert any URL to clean markdown
+- Crawl: BFS crawl entire websites to markdown
+- Browse: CDP cloud browser sessions for agents
+- Extract: Structured data extraction with LLMs (coming soon)
+
+## Key Links
+
+- Website: https://reader.dev
+- Documentation: https://docs.reader.dev
+- API Reference: https://docs.reader.dev/api-reference
+- GitHub: https://github.com/vakra-dev/reader
+- Blog: https://reader.dev/blog
+- RSS Feed: https://reader.dev/blog/rss.xml
+- npm: https://www.npmjs.com/package/@vakra-dev/reader
+- PyPI: https://pypi.org/project/reader-py/
+
+## Blog Categories
+
+- Comparisons: Head-to-head comparisons of web scraping tools and platforms
+- Tutorials: Step-by-step guides for web scraping and building with Reader
+- Roundups: Curated lists of the best tools for web data extraction and AI
+- Use Cases: Real-world applications of web scraping
+- Deep Dives: Technical explorations of browser automation and anti-bot detection
+- Thought Leadership: Perspectives on the future of web scraping and AI
+- Ecosystem: Integration guides for LangChain, CrewAI, LlamaIndex, MCP
+- Product: Feature deep-dives and engineering behind Reader
+
+## SDKs
+
+- JavaScript: @vakra-dev/reader-js (npm)
+- Python: reader-py (PyPI)
+- CLI: @vakra-dev/reader-cli (npm)
+
+## Technology
+
+- Engine: Playwright with fingerprint-generator for stealth browsing
+- Markdown: Supermarkdown (Rust HTML-to-markdown engine with NAPI bindings)
+- Deployment: Self-hosted (Docker) or managed API
