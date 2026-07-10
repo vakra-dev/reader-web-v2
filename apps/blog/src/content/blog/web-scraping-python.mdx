@@ -1,0 +1,631 @@
+---
+title: "Web Scraping in Python: The Complete 2026 Guide"
+description: "Learn web scraping in Python from basics to production. Covers requests, BeautifulSoup, Playwright, Scrapy, and Reader for managed scraping at scale."
+date: 2026-07-09
+author: "Nihal Kaul"
+category: "Guides"
+keywords:
+  - "web scraping python"
+  - "python web scraper"
+  - "beautifulsoup scraping"
+  - "requests python scraping"
+schemaType: "howto"
+faq:
+  - question: "Is Python good for web scraping?"
+    answer: "Python is the most popular language for web scraping. The ecosystem includes mature libraries for every part of the pipeline: HTTP requests (requests, httpx), HTML parsing (BeautifulSoup, lxml), browser automation (Playwright, Selenium), and full frameworks (Scrapy). Most scraping tutorials, community resources, and Stack Overflow answers are written for Python."
+  - question: "What is the best Python scraping library?"
+    answer: "For static HTML pages, requests and BeautifulSoup is the simplest starting point. For JavaScript rendered pages, Playwright is the current standard with auto wait and multi browser support. For large scale crawling with built in scheduling and pipelines, Scrapy provides framework level features. For production scraping without managing infrastructure, Reader handles everything through a single API."
+  - question: "Can Python scrape JavaScript rendered pages?"
+    answer: "Yes, through browser automation libraries. Playwright for Python launches a real Chromium, Firefox, or WebKit browser that renders JavaScript and gives you access to the fully rendered DOM. Selenium is an older alternative. Static libraries like requests and BeautifulSoup cannot render JavaScript because they only fetch the raw HTML response."
+  - question: "How do I avoid getting blocked when scraping with Python?"
+    answer: "Set proper HTTP headers (User-Agent, Accept, Accept-Language, Sec-Fetch headers), add random delays between requests, use a requests.Session for cookie persistence, and rotate proxies. For heavily protected sites, use a headless browser with stealth configuration or a scraping API that handles anti-bot bypass automatically."
+---
+
+Python is the most popular language for web scraping. The ecosystem is mature, the libraries are well documented, and the path from fetching a page to extracting structured data is clear even for intermediate developers. Whether you are pulling product data for price monitoring, scraping documentation for a RAG pipeline, or building a dataset for machine learning, Python has the right tool for every stage.
+
+This guide covers four approaches in order of complexity: requests and BeautifulSoup for static HTML, Playwright for JavaScript rendered sites, Scrapy for large scale crawling, and Reader for managed scraping where infrastructure is handled for you. Each section includes working code you can copy and run, along with the limitations you will hit and when to move to the next approach.
+
+## Prerequisites
+
+You need Python 3.10 or newer and pip. Create a virtual environment to keep dependencies isolated from your system Python.
+
+```bash
+python -m venv scraper-env
+source scraper-env/bin/activate  # macOS/Linux
+# scraper-env\Scripts\activate   # Windows
+pip install --upgrade pip
+```
+
+All code examples in this guide assume you are working inside an activated virtual environment.
+
+## Method 1: requests and BeautifulSoup
+
+This is the starting point for most Python scraping projects. The requests library handles HTTP communication and BeautifulSoup4 handles HTML parsing. Together they cover the fundamentals: fetching a page, finding elements, and extracting text and attributes.
+
+### Install
+
+```bash
+pip install requests beautifulsoup4 lxml
+```
+
+Install lxml alongside BeautifulSoup. It is significantly faster than Python's built in html.parser and handles malformed HTML more gracefully. You will notice the difference on pages with broken tags or deeply nested elements.
+
+### Fetch a Page
+
+```python
+import requests
+
+url = "https://books.toscrape.com/"
+response = requests.get(url)
+
+print(f"Status: {response.status_code}")
+print(f"Content length: {len(response.text)} characters")
+print(f"Encoding: {response.encoding}")
+```
+
+Output:
+
+```
+Status: 200
+Content length: 51266 characters
+Encoding: utf-8
+```
+
+The requests library sends an HTTP GET request and returns the full response. `response.text` contains the HTML source. `response.status_code` tells you whether the request succeeded (200), was redirected (301/302), was blocked (403), or hit a rate limit (429).
+
+One critical detail: requests sends a default User-Agent string of `python-requests/2.32.3`. Every anti-bot system on the web recognizes this as automated traffic. Even sites with minimal protection will block it. Always set a browser User-Agent for any real scraping work.
+
+```python
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+}
+
+response = requests.get(url, headers=headers)
+```
+
+Setting the full header set (not just User-Agent) is important because anti-bot systems check for missing headers as a bot signal. A real Chrome browser sends Accept, Accept-Language, Accept-Encoding, and several Sec-Fetch headers with every request. Missing any of these is suspicious.
+
+### Parse HTML and Find Elements
+
+```python
+from bs4 import BeautifulSoup
+
+soup = BeautifulSoup(response.text, "lxml")
+
+# Find a single element by tag and attribute
+title = soup.find("h1")
+print(f"Page title: {title.text}")
+
+# Find all elements matching a tag and class
+books = soup.find_all("article", class_="product_pod")
+print(f"Found {len(books)} books on this page")
+
+# CSS selectors (often the most readable option)
+prices = soup.select("p.price_color")
+for price in prices[:5]:
+    print(f"Price: {price.text}")
+```
+
+Output:
+
+```
+Page title: All products
+Found 20 books on this page
+Price: £51.77
+Price: £53.74
+Price: £50.10
+Price: £47.82
+Price: £54.23
+```
+
+BeautifulSoup provides three ways to find elements. `find()` returns the first match or None. `find_all()` returns a list of all matches. `select()` uses CSS selectors, which are often the most readable for complex queries. For example, `soup.select("div.product > h3 > a")` is clearer than nested `find` calls.
+
+Common selector patterns:
+- `soup.select("div.classname")` finds divs with a specific class
+- `soup.select("#element-id")` finds an element by ID
+- `soup.select("div > p")` finds direct child paragraphs of divs
+- `soup.select("a[href*='product']")` finds links with "product" in the href
+
+### Extract Structured Data
+
+```python
+data = []
+
+for book in books:
+    title = book.find("h3").find("a")["title"]
+    price = book.find("p", class_="price_color").text.strip()
+    rating_class = book.find("p", class_="star-rating")["class"][1]
+    availability = book.find("p", class_="instock")
+    in_stock = availability is not None
+
+    data.append({
+        "title": title,
+        "price": price,
+        "rating": rating_class,
+        "in_stock": in_stock
+    })
+
+for item in data[:5]:
+    print(f"{item['title']}")
+    print(f"  Price: {item['price']} | Rating: {item['rating']} | In stock: {item['in_stock']}")
+```
+
+Output:
+
+```
+A Light in the Attic
+  Price: £51.77 | Rating: Three | In stock: True
+Tipping the Velvet
+  Price: £53.74 | Rating: One | In stock: True
+Soumission
+  Price: £50.10 | Rating: One | In stock: True
+Sharp Objects
+  Price: £47.82 | Rating: Four | In stock: True
+Sapiens: A Brief History of Humankind
+  Price: £54.23 | Rating: Five | In stock: True
+```
+
+When extracting data, always handle missing elements. A `find()` call returns None if the element does not exist, and accessing `.text` or attributes on None raises an AttributeError. Use conditional checks for production code.
+
+```python
+# Safe extraction pattern
+title_el = book.find("h3")
+title = title_el.find("a")["title"] if title_el else "Unknown"
+
+price_el = book.find("p", class_="price_color")
+price = price_el.text.strip() if price_el else "N/A"
+```
+
+### Using Sessions for Cookies and State
+
+Some sites require cookies from a previous request before allowing access to content pages. The `requests.Session` object persists cookies across requests.
+
+```python
+session = requests.Session()
+session.headers.update(headers)
+
+# First request loads the homepage and sets cookies
+session.get("https://example.com/")
+
+# Subsequent requests include those cookies automatically
+response = session.get("https://example.com/products/page/1")
+```
+
+Sessions are also more efficient than individual `requests.get()` calls because they reuse the underlying TCP connection.
+
+### Limitations of requests and BeautifulSoup
+
+This approach works for static HTML pages where all content is present in the initial server response. It fails on three common scenarios.
+
+**JavaScript rendered content.** If the page uses React, Vue, Next.js, Angular, or any other JavaScript framework to load content dynamically, `response.text` contains the empty shell before JavaScript executes. The actual data is not in the HTML. Roughly 80% of modern websites render content this way.
+
+**Anti-bot protection.** Sites with Cloudflare, DataDome, Akamai, or PerimeterX block requests based on TLS fingerprint, header analysis, IP reputation, or JavaScript challenges. Python's requests library produces a non-browser TLS fingerprint (JA3/JA4 hash) that anti-bot systems detect regardless of what User-Agent you set. You get a [403 error](/blog/403-error-web-scraping), a CAPTCHA page, or a challenge page instead of content.
+
+**Complex session management.** Multi-step workflows (logging in, navigating through multiple pages, handling CSRF tokens) require careful cookie and session handling that becomes fragile at scale.
+
+For static HTML sites with light or no protection, requests and BeautifulSoup is the fastest and simplest approach. For everything else, you need a browser.
+
+## Method 2: Playwright for Python
+
+Playwright launches a real browser (Chromium, Firefox, or WebKit), executes JavaScript, renders the page fully, and gives you access to the complete DOM. It handles the majority of modern web pages that load content dynamically.
+
+### Install
+
+```bash
+pip install playwright
+playwright install  # Downloads browser binaries (~400MB)
+```
+
+The `playwright install` command downloads Chromium, Firefox, and WebKit binaries. If you only need Chromium, use `playwright install chromium` to save space.
+
+### Basic Scraping
+
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+
+    page.goto("https://books.toscrape.com/")
+    page.wait_for_load_state("networkidle")
+
+    books = page.query_selector_all("article.product_pod")
+
+    for book in books[:5]:
+        title = book.query_selector("h3 a").get_attribute("title")
+        price = book.query_selector("p.price_color").inner_text()
+        print(f"{title}: {price}")
+
+    browser.close()
+```
+
+Output:
+
+```
+A Light in the Attic: £51.77
+Tipping the Velvet: £53.74
+Soumission: £50.10
+Sharp Objects: £47.82
+Sapiens: A Brief History of Humankind: £54.23
+```
+
+Playwright's `wait_for_load_state("networkidle")` waits until there are no network requests for 500ms, which usually means the page has finished loading dynamic content. This is more reliable than a fixed timeout.
+
+### Auto Wait
+
+Playwright's biggest advantage over Puppeteer is auto wait. When you call `query_selector`, Playwright waits for the element to be attached to the DOM, visible, and stable before returning. This eliminates most timing issues that cause empty results in browser automation scripts.
+
+### Handling Dynamic Content
+
+For pages with infinite scroll, lazy loading, or content behind user interactions:
+
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+
+    page.goto("https://example.com/products")
+
+    # Scroll to trigger lazy loading
+    previous_count = 0
+    for _ in range(10):
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        page.wait_for_timeout(2000)
+
+        current_count = page.evaluate("document.querySelectorAll('.product-card').length")
+        if current_count == previous_count:
+            break
+        previous_count = current_count
+
+    print(f"Loaded {current_count} products after scrolling")
+    browser.close()
+```
+
+The scroll loop checks whether new content was loaded after each scroll. When the item count stops increasing, it means there is no more content to load. This is more robust than scrolling a fixed number of times.
+
+### Extracting with page.evaluate
+
+For complex extraction, `page.evaluate()` runs JavaScript inside the browser context and returns the result to Python. This is faster than making many individual `query_selector` calls because it executes in a single round trip.
+
+```python
+data = page.evaluate("""
+    () => {
+        return Array.from(document.querySelectorAll('article.product_pod')).map(el => ({
+            title: el.querySelector('h3 a').getAttribute('title'),
+            price: el.querySelector('.price_color').textContent.trim(),
+            rating: el.querySelector('.star-rating').classList[1],
+            link: el.querySelector('h3 a').href
+        }));
+    }
+""")
+
+for item in data[:5]:
+    print(f"{item['title']}: {item['price']} ({item['rating']})")
+```
+
+### Limitations of Playwright
+
+Playwright is powerful but resource intensive. Each browser instance uses 50 to 200MB of RAM. Page loads take 2 to 10 seconds instead of the 100 to 500ms of a raw HTTP request. At scale (thousands of pages), you need to manage a pool of browser instances, handle crashes, recover from memory leaks, and implement retry logic for failed pages.
+
+Playwright also does not fully solve anti-bot detection. While it runs a real browser, headless mode is detectable through `navigator.webdriver` (true in headless mode), missing browser plugins, WebGL rendering differences, and other fingerprinting signals. Sites with aggressive anti-bot systems may still detect and block headless Playwright.
+
+## Method 3: Scrapy
+
+Scrapy is a full framework for large scale web crawling. It includes an HTTP client, HTML parser, request scheduler, download middleware, item pipeline, and data export in one package. Where requests and BeautifulSoup give you building blocks, Scrapy gives you a production crawling system.
+
+### When to Use Scrapy
+
+Use Scrapy when you need to crawl many pages (hundreds to millions) across a site with built in queue management, rate limiting, retry logic, concurrent requests, and structured data export. Scrapy handles the operational complexity of large crawls that would require significant custom code with requests.
+
+Use requests and BeautifulSoup for one-off scraping tasks, prototyping, or small projects where Scrapy's framework overhead is not justified. Use Playwright for pages requiring JavaScript rendering.
+
+### Install and Create a Spider
+
+```bash
+pip install scrapy
+```
+
+```python
+# book_spider.py
+import scrapy
+
+class BookSpider(scrapy.Spider):
+    name = "books"
+    start_urls = ["https://books.toscrape.com/"]
+
+    custom_settings = {
+        "DOWNLOAD_DELAY": 1,
+        "CONCURRENT_REQUESTS": 4,
+        "ROBOTSTXT_OBEY": True,
+        "FEEDS": {
+            "books.json": {"format": "json", "indent": 2},
+        },
+    }
+
+    def parse(self, response):
+        for book in response.css("article.product_pod"):
+            yield {
+                "title": book.css("h3 a::attr(title)").get(),
+                "price": book.css("p.price_color::text").get(),
+                "rating": book.css("p.star-rating::attr(class)").get(),
+                "url": response.urljoin(book.css("h3 a::attr(href)").get()),
+            }
+
+        next_page = response.css("li.next a::attr(href)").get()
+        if next_page:
+            yield response.follow(next_page, callback=self.parse)
+```
+
+Run the spider:
+
+```bash
+scrapy runspider book_spider.py
+```
+
+This spider crawls every page of the books catalog, follows pagination links automatically, and exports all results to a JSON file. Scrapy handles request scheduling, rate limiting (1 second delay), concurrency (4 parallel requests), and robots.txt compliance without any additional code.
+
+### Scrapy's Architecture
+
+Scrapy's power comes from its layered architecture.
+
+**Spiders** define what to scrape and how to follow links. The `parse` method processes each response and yields either data items or new requests.
+
+**Middlewares** sit between the engine and the downloader. They can modify requests (add headers, rotate proxies, retry failures) and process responses (handle redirects, detect blocks) without changing spider code.
+
+**Pipelines** process extracted items. They can validate data, remove duplicates, clean values, and save to databases, CSV, JSON, or any custom destination.
+
+```python
+# A simple pipeline that cleans price data
+class CleanPricePipeline:
+    def process_item(self, item, spider):
+        price_text = item.get("price", "")
+        item["price"] = float(price_text.replace("£", "").strip())
+        return item
+```
+
+### Limitations of Scrapy
+
+Scrapy does not render JavaScript. It works with raw HTML responses, so any content loaded dynamically through JavaScript is invisible. You can integrate Scrapy with Playwright through the scrapy-playwright middleware, but this adds complexity, increases resource usage, and reduces Scrapy's speed advantage.
+
+Scrapy has a steeper learning curve than requests and BeautifulSoup. The framework architecture (spiders, items, pipelines, middlewares, settings) takes time to learn. For simple scraping tasks, the overhead is not justified.
+
+## Common Patterns
+
+### Handling Pagination
+
+Three common pagination patterns and how to handle each.
+
+**Next link pagination.** Follow the "Next" button until it disappears.
+
+```python
+import requests
+from bs4 import BeautifulSoup
+import time
+
+base_url = "https://books.toscrape.com/catalogue/"
+url = "https://books.toscrape.com/"
+all_data = []
+
+while url:
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.text, "lxml")
+
+    for book in soup.select("article.product_pod"):
+        all_data.append({
+            "title": book.select_one("h3 a")["title"],
+            "price": book.select_one(".price_color").text.strip(),
+        })
+
+    next_link = soup.select_one("li.next a")
+    if next_link:
+        url = base_url + next_link["href"]
+    else:
+        url = None
+
+    time.sleep(1)
+
+print(f"Scraped {len(all_data)} books across all pages")
+```
+
+**Offset pagination.** Increment a page or offset parameter.
+
+```python
+for page in range(1, 11):
+    url = f"https://example.com/products?page={page}"
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.text, "lxml")
+
+    items = soup.select(".product-card")
+    if not items:
+        break
+
+    for item in items:
+        # Extract data
+        pass
+
+    time.sleep(1)
+```
+
+**Infinite scroll.** Use Playwright to scroll and detect new content (covered in the Playwright section above).
+
+### Rate Limiting and Delays
+
+Sending requests too fast gets you blocked and is disrespectful to the target server. Always add delays.
+
+```python
+import time
+import random
+
+for url in urls:
+    response = requests.get(url, headers=headers)
+    # Process response
+
+    # Randomized delay (harder for anti-bot systems to pattern match)
+    time.sleep(random.uniform(0.5, 2.0))
+```
+
+For Scrapy, set `DOWNLOAD_DELAY` in settings. For Playwright, use `page.wait_for_timeout(1000)` between navigations.
+
+### Error Handling and Retries
+
+Production scrapers need to handle failures gracefully. Network errors, timeouts, rate limits, and temporary blocks are inevitable at scale.
+
+```python
+import requests
+from requests.exceptions import RequestException
+import time
+
+def scrape_with_retry(url, headers, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                return response
+
+            if response.status_code == 429:
+                wait_time = 2 ** attempt * 5
+                print(f"Rate limited. Waiting {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+
+            if response.status_code == 403:
+                print(f"Blocked on {url}")
+                return None
+
+        except RequestException as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            time.sleep(2 ** attempt)
+
+    print(f"All retries exhausted for {url}")
+    return None
+```
+
+### Saving to CSV and JSON
+
+```python
+import csv
+import json
+
+# CSV export
+with open("output.csv", "w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=["title", "price", "rating"])
+    writer.writeheader()
+    writer.writerows(data)
+
+# JSON export
+with open("output.json", "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+
+# JSON Lines (one JSON object per line, better for large datasets)
+with open("output.jsonl", "w", encoding="utf-8") as f:
+    for item in data:
+        f.write(json.dumps(item, ensure_ascii=False) + "\n")
+```
+
+JSON Lines (`.jsonl`) is often better than regular JSON for large datasets because you can process it line by line without loading the entire file into memory.
+
+## Using Reader
+
+Reader is a web infrastructure platform that handles JavaScript rendering, anti-bot bypass, proxy rotation, and content extraction in a single API call. The output is clean markdown optimized for LLM consumption.
+
+### Install
+
+```bash
+pip install reader-py
+```
+
+### Scrape a Single Page
+
+```python
+from reader_py import ReaderClient
+
+client = ReaderClient(api_key="rdr_your_key")
+
+result = client.read(url="https://example.com/blog/post")
+print(result.data.markdown)
+print(f"Title: {result.data.metadata.title}")
+print(f"Status: {result.data.metadata.status_code}")
+```
+
+One call. JavaScript rendering, anti-bot bypass, proxy rotation, content extraction, and markdown conversion all handled. No browser management, no header configuration, no proxy setup, no retry logic.
+
+### Crawl an Entire Site
+
+```python
+result = client.read(
+    url="https://docs.example.com",
+    max_depth=3,
+    max_pages=100,
+)
+
+job = client.wait_for_job(result.data.id)
+pages = client.get_all_job_results(result.data.id)
+
+for page in pages:
+    print(f"{page.url}: {len(page.markdown)} chars")
+
+    filename = page.url.split("/")[-1] or "index"
+    with open(f"output/{filename}.md", "w") as f:
+        f.write(page.markdown)
+```
+
+Reader's crawler uses BFS link discovery, stays on the same domain, deduplicates URLs, and converts every discovered page to clean markdown through [Supermarkdown](https://supermarkdown.dev), a Rust engine that processes HTML in a single pass.
+
+### Batch Scraping
+
+For scraping multiple specific URLs in parallel:
+
+```python
+urls = [
+    "https://example.com/page/1",
+    "https://example.com/page/2",
+    "https://example.com/page/3",
+]
+
+result = client.read(urls=urls)
+
+job = client.wait_for_job(result.data.id)
+pages = client.get_all_job_results(result.data.id)
+
+for page in pages:
+    print(f"{page.url}: {len(page.markdown)} chars")
+```
+
+Batch requests process up to 1,000 URLs in parallel. The SDK handles async job polling automatically.
+
+### When to Use Reader vs DIY
+
+Use requests and BeautifulSoup when you are learning, prototyping, or scraping simple static pages with no anti-bot protection. The overhead is zero and the learning curve is gentle.
+
+Use Playwright when you need full browser control for complex interactions: multi-step forms, authentication flows, screenshot testing, or debugging specific page behaviors. The tradeoff is resource usage and operational complexity.
+
+Use Scrapy when you are building a large scale crawling system and want framework level control over scheduling, middleware, and data pipelines. Scrapy is the right choice when you need to customize every layer of the crawling process.
+
+Use Reader when you want production scraping without managing browser infrastructure, proxy rotation, anti-bot bypass, and content extraction yourself. Reader handles the infrastructure so you can focus on what you do with the data. The output is clean [markdown](/blog/convert-website-to-markdown) rather than raw HTML, which saves significant preprocessing for LLM and RAG pipelines.
+
+Reader is available at [reader.dev](https://reader.dev) with 1,000 free pages per month. Full documentation is at [docs.reader.dev](https://docs.reader.dev). The core engine is open source at [GitHub](https://github.com/vakra-dev/reader).
+
+## When to Use Each Method
+
+| Criteria | requests + BS4 | Playwright | Scrapy | Reader |
+|----------|---------------|------------|--------|--------|
+| JavaScript rendering | No | Yes | No (needs plugin) | Yes |
+| Anti-bot bypass | No | Partial | No | Yes |
+| Speed | Fastest | Slowest | Fast | Fast (managed) |
+| Scale | Manual | Heavy (RAM) | Built in | Built in |
+| Learning curve | Low | Medium | High | Low |
+| Output format | Raw HTML | Raw HTML | Raw HTML | Clean markdown |
+| Best for | Static pages, learning | JS pages, interactions | Large crawls | Production pipelines |
+
+## Conclusion
+
+Python web scraping has a clear progression. Start with requests and BeautifulSoup for static pages. Move to Playwright when JavaScript rendering is required. Use Scrapy when you need framework level crawling at scale. Use Reader when you want the infrastructure managed for you.
+
+Each tool solves a different problem. The right choice depends on three factors: whether the target page uses JavaScript (most modern sites do), how many pages you need to scrape (one vs thousands), and how much infrastructure you want to maintain (everything vs nothing).

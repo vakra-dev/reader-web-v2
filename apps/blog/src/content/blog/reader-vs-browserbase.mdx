@@ -1,140 +1,159 @@
 ---
 title: "Reader vs Browserbase: Cloud Browser Sessions Compared"
-description: "Compare Reader and Browserbase for cloud browser automation. Covers CDP sessions, content extraction, Stagehand, AI agent support, and use cases."
-date: 2026-07-08
+description: "Compare Reader and Browserbase for cloud browser sessions. Features, architecture, AI integration, open source licensing, and developer experience."
+date: 2026-07-09
 author: "Nihal Kaul"
 category: "Comparisons"
 keywords:
   - "browserbase alternative"
-  - "reader vs browserbase"
   - "cloud browser api"
-  - "cloud browser sessions"
+  - "browser automation"
+  - "CDP browser sessions"
 schemaType: "article"
 faq:
-  - question: "What is the difference between Reader and Browserbase?"
-    answer: "Reader is a web scraping platform that includes browser sessions as one of its capabilities alongside scraping, crawling, and extraction. Browserbase is a dedicated cloud browser infrastructure platform with sessions, agents, search, fetch, and observability. Reader returns clean markdown. Browserbase focuses on browser automation."
-  - question: "Does Browserbase support markdown output?"
-    answer: "Browserbase's Fetch API returns content as markdown, but it does not render JavaScript. For JavaScript rendered pages, you need a full browser session and handle content extraction yourself. Reader returns clean markdown from any URL with JavaScript rendering and content extraction included."
-  - question: "Can I use Playwright with both Reader and Browserbase?"
-    answer: "Yes. Both support Playwright connections via CDP. Reader's sessions include anti-bot stealth and proxy configuration. Browserbase's sessions include stealth mode, CAPTCHA solving, and observability features like session replay."
+  - question: "Does Browserbase support self hosting?"
+    answer: "Browserbase's Stagehand SDK is open source (MIT) and works locally with any Chromium browser. The cloud infrastructure (managed browsers, CAPTCHA solving, session replay, action caching) requires Browserbase's managed service and is not self hostable. Reader's entire platform is Apache 2.0 and fully self hostable."
+  - question: "Can Reader's browser sessions work with Stagehand?"
+    answer: "Reader's browser sessions expose a CDP WebSocket endpoint. Since Stagehand v3 is browser driver agnostic and works with any CDP compatible browser, it could theoretically connect to a Reader browser session. However, Stagehand is designed to work with Browserbase's infrastructure for features like action caching and CAPTCHA solving."
   - question: "Which is better for AI agents?"
-    answer: "Browserbase is purpose-built for AI agents with features like managed agents, identity management, and multi-model gateway. Reader is better when agents need web content as clean markdown for reasoning, RAG, or code generation."
+    answer: "It depends on the agent architecture. If your agent needs natural language browser control with self healing (Stagehand's act/extract/observe/agent primitives), Browserbase is the more direct fit. If your agent needs web data as context (clean markdown from scraping/crawling) plus occasional browser sessions for auth flows, Reader's three primitives cover a broader surface through a single MCP server."
+  - question: "Can I use Reader and Browserbase together?"
+    answer: "Yes. Reader handles scraping and crawling to produce clean markdown for LLM context, while Browserbase handles AI-driven browser automation through Stagehand. The two platforms solve different problems and can complement each other in an agent pipeline."
 ---
 
-Reader and Browserbase both provide cloud browser sessions, but they solve different problems. Reader is a web scraping platform where browser sessions are one of several primitives. Browserbase is a dedicated cloud browser infrastructure platform built specifically for AI agents.
+Reader and Browserbase both provide cloud browser sessions, but they approach the problem from opposite directions. Browserbase is a managed cloud browser platform with an AI automation SDK. Reader is a cloud web infrastructure platform with an open source core that includes browser sessions alongside scraping and crawling. This comparison covers what each tool does, how they handle browser automation, their AI integration approaches, and their open source licensing.
 
-This comparison helps you decide which approach fits your use case.
+## What Browserbase Does
 
-## Quick Comparison
+Browserbase is a cloud browser platform designed for AI agents and browser automation. You connect to a managed headless browser over CDP, run your automation, and Browserbase handles the infrastructure: browser provisioning, CAPTCHA solving, session recording, and stealth.
 
-| Feature | Reader | Browserbase |
-|---------|--------|-------------|
-| Primary purpose | Web scraping and content extraction | Cloud browser infrastructure for AI agents |
-| Browser sessions | Yes (CDP WebSocket) | Yes (CDP WebSocket + Selenium) |
-| Content extraction | Built in (returns markdown) | Fetch API (no JS rendering) or manual via sessions |
-| Markdown output | Default on all endpoints | Via Fetch API (limited) |
-| Crawl support | Yes (API-level) | No |
-| Stagehand/Agent framework | No | Yes (Stagehand, 23,400 GitHub stars) |
-| AI agent primitives | Scrape, crawl, browse, extract | Browsers, agents, search, fetch, identity, models, observability |
-| SDKs | JavaScript, Python | TypeScript, Python, Java, Kotlin, Go, Ruby, .NET |
-| Automation frameworks | Playwright, Puppeteer | Playwright, Puppeteer, Selenium |
-| Session features | Stealth, proxies | Stealth, CAPTCHA solving, session replay, regions |
-| MCP server | Yes | Yes (Stagehand-based) |
-| Self-hostable | Yes | No |
+The platform includes several products that work together.
 
-## Browser Sessions: How They Differ
+**Stagehand** is Browserbase's open source AI browser automation SDK, licensed under MIT with 22,000+ GitHub stars. It provides four primitives for controlling browsers with natural language. `act` performs browser actions from plain English instructions (click, fill, navigate, scroll). `extract` pulls structured data from any page with Zod schema validation. `observe` surfaces what is actionable on a page before you commit to an action. `agent` runs multi step workflows autonomously when you need end to end execution.
 
-Both tools let you create a cloud browser session and connect via CDP. The difference is in what comes with the session.
+Stagehand v3 is multi language: TypeScript, Python, Go, Ruby, Java, Rust, and a REST API for direct use from Claude Code, MCP servers, curl, and n8n. It is browser driver agnostic, working with Playwright, Puppeteer, or any CDP compatible driver without requiring a specific one internally.
 
-**Reader's sessions** are part of a scraping platform. You create a session, get a CDP URL, and connect with Playwright or Puppeteer. The browser runs with fingerprint generation and proxy configuration already applied. Sessions are designed for scraping workflows: navigate to a page, interact with it, and extract content.
+**Director** is a no code tool that converts English instructions into Stagehand workflows without writing any code.
+
+**Model Gateway** lets you route LLM calls through your Browserbase API key, supporting OpenAI, Anthropic, and Gemini with no separate accounts or credentials needed. Switching models is a one line change.
+
+Browserbase also provides session replay for debugging (watch exactly what the browser did), automatic action caching that skips LLM inference on repeat actions, prompt observability, and an MCP server.
+
+## What Reader Does
+
+Reader is a cloud web infrastructure platform for AI, available at reader.dev. The managed platform handles scraping, crawling, and browser automation through a single API. The core engine is open source under the Apache 2.0 license, so teams can also self host the entire platform on their own infrastructure.
+
+Reader provides three primitives. Scrape takes any URL and returns clean, LLM ready markdown through Supermarkdown, a Rust HTML to markdown engine. Crawl discovers and extracts content across entire domains using BFS link discovery with configurable depth and page limits. Browser creates cloud browser sessions with full CDP compatibility.
+
+When you create a browser session through Reader's cloud platform, you get back a CDP WebSocket endpoint. Your existing Playwright or Puppeteer scripts connect directly without modification. The browser sessions include stealth features built on Ulixee Hero: TLS fingerprinting, DNS over TLS, WebRTC IP masking, canvas and WebGL randomization, and navigator.webdriver spoofing. Tiered proxy pools (datacenter and residential) with automatic escalation handle IP reputation.
+
+Reader also includes an MCP server (`@vakra-dev/reader-mcp`) with nine tools: scrape, batch scrape, crawl, discover, extract, browser session creation, job status, job cancellation, and credit checking. The managed platform offers 1,000 free pages per month with no credit card required.
+
+## Browser Sessions: Two Architectures
+
+Both platforms give you cloud browser sessions over CDP. The difference is what sits on top.
+
+### Browserbase: AI SDK on top of managed browsers
+
+Browserbase's architecture puts Stagehand between you and the browser. Instead of writing `page.click('.submit-button')`, you write `stagehand.act('click the submit button')`. The AI interprets your intent, finds the right element, and performs the action. If the site changes its DOM structure, Stagehand's self healing adapts without breaking your script.
+
+This is powerful for workflows where page structure is unpredictable. A checkout flow that changes layout between A/B tests. A form that renders differently based on user state. A page that rearranges elements between deployments. Stagehand handles these variations because it works from intent rather than selectors.
+
+The tradeoff is that every AI powered action requires LLM inference. This adds latency and cost per step. Browserbase mitigates this with automatic action caching: once a workflow runs successfully, repeat executions skip the LLM and replay the cached actions. When the site changes, Stagehand detects the break and re engages the AI.
+
+### Reader: Raw CDP on top of stealth browsers
+
+Reader's architecture gives you the raw CDP connection to a cloud hosted browser. You write standard Playwright or Puppeteer code against Reader's managed browser that has stealth features baked in. There is no AI layer between you and the browser.
+
+This is powerful for workflows where you know exactly what to do. Logging into a known portal, navigating a specific dashboard, filling a form with defined fields. Your existing Playwright scripts connect to Reader's CDP endpoint and work without modification. The stealth layer (TLS fingerprinting, WebRTC masking, proxy rotation) handles anti bot detection transparently.
+
+The tradeoff is that you are responsible for writing the automation logic. If a site changes its selectors, your script breaks until you update it. There is no AI self healing. But there is also no LLM inference cost per action, no latency from AI processing, and no dependency on model availability.
+
+## AI Agent Integration
+
+Browserbase and Reader take fundamentally different approaches to AI agent integration.
+
+**Browserbase builds the agent layer.** Stagehand is an AI agent SDK. The four primitives (act, extract, observe, agent) are designed to be the interface between your agent framework and the browser. Model Gateway handles LLM routing. Director offers no code English to automation. The philosophy is: Browserbase provides the AI powered browser, you provide the goal.
+
+**Reader provides the tools, you build the agent.** Reader's MCP server exposes nine tools (scrape, crawl, browser sessions, extract, discover) that any agent framework can call. The scrape and crawl tools return clean markdown that goes directly into agent context windows. The browser tool returns a CDP endpoint that agents can automate with existing Playwright or Puppeteer logic. The philosophy is: Reader provides web access primitives, you bring your own agent logic.
+
+For teams using Claude Code, Cursor, or other MCP compatible tools, both approaches integrate cleanly. Browserbase has an MCP server. Reader has an MCP server. The difference is whether the AI reasoning happens inside the browser tool (Browserbase) or outside it (Reader).
+
+## Scraping and Crawling
+
+This is the clearest product gap between the two.
+
+**Reader** includes scraping and crawling as core primitives alongside browser sessions. Scrape any URL to clean markdown. Crawl entire domains with BFS discovery, depth limits, page limits, and URL pattern filtering. The output is clean markdown processed through Supermarkdown (Rust, single pass O(n) conversion). These primitives work independently of browser sessions for pages that do not need full browser rendering.
+
+**Browserbase** is a browser platform. It does not have a scrape or crawl endpoint. To get content from a page, you create a browser session and use Stagehand's extract primitive or Playwright's content extraction. There is no built in BFS link discovery, no multi page crawling, and no HTML to markdown conversion pipeline.
+
+If your use case is "give me clean markdown from 500 pages across a documentation site," Reader handles this with a single crawl call. With Browserbase, you would need to build the crawling logic yourself on top of their browser sessions.
+
+If your use case is "navigate a complex multi step workflow with AI driven decisions," Browserbase's Stagehand handles this natively. With Reader, you would write the workflow logic yourself against the CDP connection.
+
+## Open Source and Self Hosting
+
+**Browserbase's Stagehand** is fully open source under the MIT license. The SDK source code is on GitHub across language specific repositories. Stagehand works locally with any Chromium browser without Browserbase. When you need production infrastructure (CAPTCHA solving, session replay, action caching, managed browsers), you connect Stagehand to Browserbase's cloud. The cloud infrastructure itself is not open source or self hostable.
+
+**Reader** operates as a managed cloud platform at reader.dev and is simultaneously fully open source under the Apache 2.0 license. The entire engine, including scraping, crawling, browser pool management, stealth stack, and Supermarkdown conversion, is on GitHub. Teams can use the managed cloud platform for zero ops, or clone the repository and deploy the complete platform on their own servers. There are no features gated behind the managed platform. Everything available in the cloud is available in the open source version.
+
+Both platforms have open source SDKs (Stagehand MIT, Reader Apache 2.0). The difference is in the infrastructure layer: Browserbase's cloud is closed, Reader's cloud engine is open.
+
+## When to Pick Each Tool
+
+### Choose Browserbase if:
+
+You are building AI browser agents where natural language control is the primary interface. You want self healing automation that adapts when sites change their DOM. You need session replay and debugging tools for browser automation. You want Model Gateway to simplify LLM provider management. You prefer a managed service with no browser infrastructure to maintain.
+
+### Choose Reader if:
+
+You need scraping, crawling, and browser sessions in a single cloud platform. You want raw CDP access with stealth features rather than an AI layer on top. You need clean markdown output from web pages for LLM pipelines. You want Apache 2.0 open source licensing with the option to self host the same platform you use in the cloud. You want to use your existing Playwright or Puppeteer scripts against cloud browsers without any framework changes.
+
+## Getting Started with Reader
+
+Reader offers 1,000 free pages per month at [reader.dev](https://reader.dev) with no credit card required.
 
 ```python
 from reader_py import ReaderClient
-from playwright.sync_api import sync_playwright
 
 client = ReaderClient(api_key="rdr_your_key")
-session = client.create_session(duration=300)
 
-with sync_playwright() as p:
-    browser = p.chromium.connect_over_cdp(session.cdp_url)
-    page = browser.contexts[0].pages[0]
-    page.goto("https://example.com/dashboard")
-    content = page.content()
+# Scrape a page to clean markdown
+result = client.read(url="https://example.com")
+print(result.data.markdown)
+
+# Create a browser session
+session = client.sessions.create(max_duration_ms=300000)
+print(session.ws_endpoint)  # Connect with Playwright or Puppeteer
 ```
-
-**Browserbase's sessions** are part of a broader agent infrastructure. You create a session with options for region (US, EU, AP), operating system emulation, ad blocking, CAPTCHA solving, and session recording. Sessions support Playwright, Puppeteer, and Selenium.
-
-```python
-from browserbase import Browserbase
-from playwright.sync_api import sync_playwright
-
-bb = Browserbase(api_key="your_key")
-session = bb.sessions.create()
-
-with sync_playwright() as p:
-    browser = p.chromium.connect_over_cdp(session.connect_url)
-    page = browser.contexts[0].pages[0]
-    page.goto("https://example.com/dashboard")
-```
-
-Browserbase adds session replay for debugging, region selection for geographically distributed testing, and observability features (logs, prompts, replays). Reader focuses on getting content out of the browser efficiently.
-
-## Content Extraction
-
-This is where the two tools diverge most.
-
-**Reader** is a content extraction platform. Every endpoint returns clean [markdown](/blog/convert-website-to-markdown) with navigation, ads, and boilerplate stripped. You do not need a browser session for most scraping tasks. The Read endpoint handles rendering, extraction, and conversion in one call. Browser sessions are for cases where you need custom interaction before extraction.
-
-**Browserbase** is browser infrastructure. It gives you the browser, but content extraction is your responsibility. Their Fetch API can return markdown from a URL, but it does not render JavaScript or bypass anti-bot protection. For JavaScript rendered pages, you need a full session and write your own extraction logic, or use Stagehand's `extract()` method.
-
-If your goal is to get clean content from web pages, Reader does this in one API call. If your goal is to give an AI agent a browser it can control for complex multi-step tasks, Browserbase provides the infrastructure.
-
-## Stagehand vs Reader's Primitives
-
-Browserbase's [Stagehand](https://github.com/browserbase/stagehand) framework (23,400 GitHub stars, MIT license) lets you control browsers with natural language. Its core methods are `act()` (perform an action), `agent()` (multi-step tasks), and `extract()` (structured data from pages).
 
 ```javascript
-const stagehand = new Stagehand({ browserbaseApiKey: "your_key" });
-await stagehand.init();
-await stagehand.page.goto("https://example.com");
+import { ReaderClient } from "@vakra-dev/reader-js";
 
-// Natural language actions
-await stagehand.act("click the search button");
-await stagehand.act("type 'web scraping' in the search field");
+const reader = new ReaderClient({ apiKey: "rdr_your_key" });
 
-// Structured extraction
-const data = await stagehand.extract({
-  instruction: "extract the product name and description",
-  schema: { name: "string", description: "string" },
-});
+// Scrape a page to clean markdown
+const result = await reader.read({ url: "https://example.com" });
+console.log(result.data.markdown);
+
+// Create a browser session
+const session = await reader.sessions.create({ maxDurationMs: 300000 });
+console.log(session.wsEndpoint); // Connect with Playwright or Puppeteer
 ```
 
-Reader takes a different approach. Instead of natural language browser control, it provides API primitives: read (scrape), crawl (discover and scrape), browse (CDP session), and extract (structured data via schema). The focus is on getting content efficiently rather than simulating human browsing.
+You can also use the API directly with curl:
 
-Both approaches are valid. Stagehand is better for exploratory tasks where you do not know the exact page structure. Reader's primitives are better for defined scraping and crawling workflows.
+```bash
+curl -X POST https://api.reader.dev/v1/read \
+  -H "x-api-key: rdr_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
 
-## When to Use Reader
-
-Reader is the better choice when:
-
-- **You need clean markdown from web pages.** Reader's entire pipeline is optimized for content extraction and [markdown conversion](/blog/introducing-supermarkdown).
-- **You need to crawl websites.** API-level crawl with depth and page limits, returning markdown for every page.
-- **You want scraping + browser in one platform.** Most tasks use the Read endpoint. Sessions are for edge cases.
-- **You want to self-host.** Run the engine on your own infrastructure.
-
-## When to Use Browserbase
-
-Browserbase is the better choice when:
-
-- **You are building AI agents that browse the web.** Browserbase's agent primitives, identity management, and multi-model gateway are built for this.
-- **You need natural language browser control.** Stagehand's `act()` and `agent()` methods are more intuitive than writing Playwright scripts.
-- **You need session observability.** Replay, logging, and debugging tools for multi-step agent runs.
-- **You need broad SDK support.** Seven languages cover more integration scenarios.
+Full documentation is at [docs.reader.dev](https://docs.reader.dev). Source code is on [GitHub](https://github.com/vakra-dev/reader).
 
 ## Conclusion
 
-Reader and Browserbase serve different needs. Reader gives you content from the web as clean markdown with minimal effort. Browserbase gives your AI agents a fully featured browser they can control.
+Browserbase and Reader are both cloud platforms that solve different problems with browsers. Browserbase provides an AI powered browser platform where Stagehand handles the reasoning and you provide the goal. Reader provides a cloud web infrastructure platform where you get raw CDP access, scraping, and crawling through a single API, with the option to self host the same engine.
 
-For most web scraping tasks, Reader's approach is simpler. For complex agent workflows that require multi-step browsing, authentication, and observability, Browserbase's infrastructure is purpose-built.
-
-Check the [Reader documentation](https://docs.reader.dev) or [Browserbase documentation](https://docs.browserbase.com) to get started.
+If you need AI driven browser automation with self healing and no code options, Browserbase is purpose built for that. If you need scraping, crawling, and browser sessions under one roof with Apache 2.0 licensing and the flexibility of managed or self hosted deployment, Reader is built for those requirements.

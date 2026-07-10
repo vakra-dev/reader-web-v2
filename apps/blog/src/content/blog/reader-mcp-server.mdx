@@ -1,88 +1,86 @@
 ---
 title: "Connect Reader to Any AI Agent via MCP"
-description: "Set up Reader's MCP server to give AI agents web scraping capabilities. Works with Claude Code, Cursor, Windsurf, and any MCP-compatible tool."
-date: 2026-07-08
+description: "Install Reader's MCP server to give any AI tool web access. Covers Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, and more."
+date: 2026-07-09
 author: "Nihal Kaul"
 category: "Ecosystem"
 keywords:
   - "reader mcp server"
   - "mcp web scraping"
-  - "claude code web scraping"
   - "model context protocol"
   - "ai agent web access"
 schemaType: "howto"
 faq:
-  - question: "What is MCP and why does it matter for web scraping?"
-    answer: "MCP (Model Context Protocol) is an open standard from Anthropic that lets AI applications connect to external tools. With Reader's MCP server, AI agents can scrape websites, crawl domains, and create browser sessions directly, giving them real-time access to web data."
-  - question: "Which AI tools support Reader's MCP server?"
-    answer: "Reader's MCP server works with Claude Code, Claude Desktop, Cursor, Windsurf, VS Code (via GitHub Copilot), Zed, and any application that supports the Model Context Protocol. It runs as a local stdio process, so it works anywhere MCP is supported."
-  - question: "How do I install Reader's MCP server?"
-    answer: "Run 'claude mcp add reader -- npx -y @vakra-dev/reader-mcp' in Claude Code, or add the server configuration to .cursor/mcp.json for Cursor. You need a Reader API key from console.reader.dev."
-  - question: "Can AI agents crawl entire websites with Reader MCP?"
-    answer: "Yes. The reader_crawl tool discovers and scrapes linked pages from a starting URL. You can set depth limits (1-10) and page limits (1-10,000). The agent gets clean markdown for every page discovered, which it can use for research, indexing, or building knowledge bases."
+  - question: "What AI tools support MCP?"
+    answer: "Claude (Code and Desktop), ChatGPT, Cursor, Windsurf, VS Code (via Copilot), Gemini, Microsoft Copilot, Codex, Cline, Zed, Replit, Continue.dev, and JetBrains AI Assistant. The protocol is an open standard maintained by the Linux Foundation, so support continues to expand."
+  - question: "Can I use multiple MCP servers at once?"
+    answer: "Yes. Most MCP clients support multiple servers simultaneously. Install Reader for web access, GitHub MCP for repository operations, and other servers for other capabilities. Your AI assistant routes to the appropriate server based on the task."
+  - question: "Is MCP the same as function calling?"
+    answer: "No. Function calling is defined per model and per API call. MCP is a protocol that works across models and clients. One MCP server installed in Claude Code also works in Cursor, VS Code, and every other compatible client. Build once, use everywhere."
+  - question: "Does Reader MCP require payment?"
+    answer: "Reader offers 1,000 free pages per month. No credit card required. Sign up at reader.dev to get your API key. Cache hits and failed requests cost zero credits."
 ---
 
-MCP (Model Context Protocol) is an open standard from Anthropic that connects AI applications to external tools. Think of it like USB for AI: a standard interface that lets any compatible AI tool use any compatible server.
+The Model Context Protocol is how AI tools talk to external services. Reader's MCP server gives any MCP compatible client the ability to scrape, crawl, extract, and automate the web through nine tools. Install it once and it works across Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Codex, and OpenCode.
 
-Reader's MCP server gives AI agents the ability to scrape web pages, crawl entire sites, extract structured data, and create browser sessions. Once connected, your AI tool can fetch live web data without you writing any scraping code.
+## What Is MCP
 
-This guide shows how to set it up in Claude Code, Cursor, and other MCP-compatible tools.
+The Model Context Protocol is an open standard introduced by Anthropic on November 25, 2024 and donated to the Linux Foundation's Agentic AI Foundation on December 9, 2025. The foundation was co founded by Anthropic, OpenAI, and Block, with AWS, Google, Microsoft, Cloudflare, and Bloomberg as supporting members.
 
-## What Reader's MCP Server Exposes
+MCP solves a specific problem. Without it, every AI tool needs custom integrations for every external service. N tools times M services equals N times M custom connectors. MCP replaces that with a single protocol. Any MCP compatible client can call any MCP server using the same interface.
 
-The `@vakra-dev/reader-mcp` package exposes these tools to AI agents:
+As of December 2025, the MCP ecosystem had over 97 million monthly SDK downloads and 10,000 active servers. It is supported by Claude (Code and Desktop), ChatGPT, Cursor, Windsurf, VS Code, Gemini, Microsoft Copilot, Codex, Cline, Zed, Replit, Continue.dev, and JetBrains AI Assistant.
 
-| Tool | What It Does |
-|------|-------------|
-| `reader_scrape` | Scrape a single URL, return clean markdown |
-| `reader_batch_scrape` | Scrape multiple URLs as an async batch job |
-| `reader_crawl` | Crawl a website, discover and scrape linked pages |
-| `reader_discover` | Discover URLs on a site without scraping content |
-| `reader_extract` | Scrape + extract structured data using AI |
-| `reader_job_status` | Check status of async batch and crawl jobs |
-| `reader_session_create` | Create a cloud browser session with CDP access |
-| `reader_credits` | Check credit balance and usage |
+For web scraping, this means your AI coding assistant can scrape pages, crawl sites, extract structured data, and control browser sessions through a single installed MCP server, regardless of which AI tool you use.
 
-Every tool that returns content gives the agent clean markdown. No HTML parsing needed on the agent's side.
+## What Reader MCP Exposes
 
-## Setup in Claude Code
+Reader's MCP server (`@vakra-dev/reader-mcp`) provides nine tools.
 
-One command to install:
+| Tool | Description | Credits |
+|------|-------------|---------|
+| reader_scrape | Scrape a URL to clean markdown | 1/page (standard), 3/page (premium) |
+| reader_batch_scrape | Scrape up to 1,000 URLs in parallel | 1/page |
+| reader_crawl | Crawl a site with depth and page limits | 1/page |
+| reader_discover | Find all URLs on a site (no scraping) | 1/job flat |
+| reader_extract | Scrape + AI structured extraction | scrape + 2/page |
+| reader_session_create | Create a browser session with CDP WebSocket | 1/minute |
+| reader_job_status | Check async job status | free |
+| reader_cancel_job | Cancel a running job | free |
+| reader_credits | Check remaining credit balance | free |
+
+Cache hits cost 0 credits. Failed requests cost 0 credits.
+
+## Installation for Each Client
+
+### Claude Code
+
+The simplest installation. One terminal command:
 
 ```bash
-claude mcp add --env READER_API_KEY=rdr_your_key --transport stdio reader \
-  -- npx -y @vakra-dev/reader-mcp
+claude mcp add reader -- npx -y @vakra-dev/reader-mcp
 ```
 
-That is it. Claude Code will now have access to all Reader tools. You can verify by asking Claude to scrape a page:
+Set your API key:
 
-> "Scrape https://docs.anthropic.com and summarize the key concepts"
+```bash
+export READER_API_KEY=rdr_your_key
+```
 
-Claude will call `reader_scrape`, get back clean markdown, and summarize it.
+Or pass it during setup:
 
-### What you can do with it
+```bash
+claude mcp add reader --env READER_API_KEY=rdr_your_key -- npx -y @vakra-dev/reader-mcp
+```
 
-**Research a topic from live web data:**
+Verify with `claude mcp list`.
 
-> "Crawl the Reader documentation at docs.reader.dev and explain how the crawl API works"
+### Claude Desktop
 
-Claude calls `reader_crawl` with the docs URL, gets markdown for every page, and synthesizes an answer from the actual documentation.
+Add to your Claude Desktop configuration file.
 
-**Extract structured data:**
-
-> "Go to this product page and extract the name, description, and key features as JSON"
-
-Claude calls `reader_extract` with a schema and returns structured data.
-
-**Create a browser session for complex interactions:**
-
-> "Create a browser session and navigate to the dashboard to check the latest metrics"
-
-Claude calls `reader_session_create` and gets a CDP URL it can use for browser automation.
-
-## Setup in Cursor
-
-Create `.cursor/mcp.json` in your project root:
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -98,13 +96,35 @@ Create `.cursor/mcp.json` in your project root:
 }
 ```
 
-Restart Cursor, and the Reader tools will be available to the AI assistant. You can also place this file at `~/.cursor/mcp.json` for global access across all projects.
+Restart Claude Desktop after saving.
 
-## Setup in VS Code, Windsurf, and Other Editors
+### Cursor
 
-The configuration is the same JSON format across most MCP-compatible editors. Create an `mcp.json` file (location varies by editor) with the server configuration shown above.
+Open Cursor Settings, navigate to the MCP section, and add a new server with:
 
-For **Claude Desktop**, add the server to `claude_desktop_config.json`:
+```json
+{
+  "reader": {
+    "command": "npx",
+    "args": ["-y", "@vakra-dev/reader-mcp"],
+    "env": {
+      "READER_API_KEY": "rdr_your_key"
+    }
+  }
+}
+```
+
+### VS Code
+
+Configure through the MCP extension settings (Copilot or Continue.dev). Add the same JSON structure to the MCP servers configuration.
+
+### Windsurf, Codex, OpenCode
+
+All follow the same pattern. Add the server entry to the client's MCP configuration with the `npx` command and your API key.
+
+### Project Level Configuration
+
+For team projects, create a `.mcp.json` file at the root of your repository:
 
 ```json
 {
@@ -120,51 +140,44 @@ For **Claude Desktop**, add the server to `claude_desktop_config.json`:
 }
 ```
 
-The server runs as a local stdio process. It communicates with the AI tool over JSON-RPC, and all API calls go through Reader's servers. Your API key is stored locally and never shared with the AI tool's cloud service.
-
-## How It Compares to Other Scraping MCP Servers
-
-Several [web scraping MCP servers](/blog/best-web-scraping-api) exist. Here is how they compare:
-
-| MCP Server | Tools | Markdown Output | Browser Sessions | Crawl Support |
-|-----------|-------|----------------|-----------------|--------------|
-| Reader MCP | 8 | Yes (default) | Yes (CDP) | Yes |
-| Firecrawl MCP | 11 | Yes (default) | Yes (Interact) | Yes |
-| Playwright MCP | Browser automation | No (raw DOM) | Yes | No |
-| Fetch MCP (reference) | 1 (fetch URL) | No | No | No |
-
-Reader and [Firecrawl](/blog/reader-vs-firecrawl) MCP servers are the most capable for AI workflows. Reader's advantage is that the markdown output comes from [Supermarkdown](/blog/introducing-supermarkdown) (Rust engine), and browser sessions provide direct CDP access for Playwright and Puppeteer compatibility.
-
-The reference Fetch MCP server (included in the official MCP servers repository) only fetches URLs without JavaScript rendering or content extraction. It is a starting point, not a production solution.
+Commit this file to your repository. Every team member who opens the project in Claude Code or another MCP compatible tool gets Reader's web tools automatically.
 
 ## Practical Examples
 
-### Build a competitive analysis report
+### Research a library before using it
 
-Ask your AI agent:
+Ask your AI assistant: "Scrape the axios documentation and explain how interceptors work."
 
-> "Scrape the landing pages of Firecrawl, ScrapingBee, and ZenRows. Compare their positioning, features, and messaging. Create a competitive analysis report."
+The assistant calls `reader_scrape` with the documentation URL, gets the clean markdown content, and provides an explanation based on the actual current documentation. No outdated training data, no hallucinated API signatures.
 
-The agent calls `reader_scrape` three times, gets clean markdown for each landing page, and produces a structured comparison.
+### Build a knowledge base from a documentation site
 
-### Index documentation for a knowledge base
+Ask: "Crawl https://docs.reader.dev with max depth 2 and create a summary of all available features."
 
-> "Crawl all pages under docs.example.com (max 50 pages, depth 3) and save each page as a markdown file in the /docs folder"
+The assistant calls `reader_crawl`, which discovers and scrapes every page within 2 levels. It then processes all the returned markdown and produces a structured summary. For a documentation site with 30 pages, this gives you a complete overview in about a minute.
 
-The agent calls `reader_crawl`, polls the job status, and writes each page's markdown to a file. You now have a local copy of the documentation in a format you can search, index, or feed into a [RAG pipeline](/blog/scrape-website-to-markdown).
+### Extract structured data from any page
 
-### Monitor a webpage for changes
+Ask: "Extract the company name, founding year, and number of employees from this company's about page."
 
-> "Scrape this pricing page and compare it with the version I saved last week"
+The assistant calls `reader_extract` with a schema defining the fields you want. The response is typed JSON ready for use in your application.
 
-The agent calls `reader_scrape`, gets the current markdown, and diffs it against the saved version.
+### Test an authenticated workflow
 
-## Getting Your API Key
+Ask: "Create a browser session and navigate to our staging login page."
 
-Reader's MCP server requires an API key. Get one for free at [console.reader.dev](https://console.reader.dev). The free tier includes 1,000 credits per month, which is enough for hundreds of scrape requests.
+The assistant calls `reader_session_create` and gets a CDP WebSocket URL. It can then automate browser interactions: filling forms, clicking buttons, navigating pages. The session persists across multiple tool calls.
+
+## Using Multiple MCP Servers Together
+
+Most MCP clients support multiple servers simultaneously. You can install Reader for web scraping alongside other MCP servers for different capabilities.
+
+A typical development setup might include Reader MCP for web access, a GitHub MCP for repository operations, a database MCP for data queries, and a file system MCP for local file management. Your AI assistant routes to the right server based on the task.
+
+For example: "Scrape this documentation site (Reader), extract the key API changes (Reader extract), and create a PR summarizing the changes (GitHub MCP)." The assistant orchestrates calls across multiple servers to complete the workflow.
 
 ## Conclusion
 
-Reader's MCP server turns any MCP-compatible AI tool into a web-aware agent. One install command gives your AI the ability to scrape, crawl, extract, and browse the web.
+Reader's MCP server turns any MCP compatible AI tool into one that can read, crawl, extract, and automate the web. Nine tools, one installation, full web access across Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Codex, and OpenCode.
 
-Set it up in [Claude Code](https://claude.ai/code), [Cursor](https://cursor.com), or any MCP-compatible editor. Check the [Reader documentation](https://docs.reader.dev) for the full API reference.
+Get your free API key at [reader.dev](https://reader.dev) with 1,000 free pages per month. Full MCP documentation is at [github.com/vakra-dev/reader-mcp](https://github.com/vakra-dev/reader-mcp).

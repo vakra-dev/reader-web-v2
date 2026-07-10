@@ -1,209 +1,177 @@
 ---
-title: "Reader vs Firecrawl: Web Scraping for AI Compared"
-description: "A detailed comparison of Reader and Firecrawl for web scraping, covering output quality, crawling, browser automation, anti-bot, and AI features."
-date: 2026-07-08
+title: "Reader vs Firecrawl: Open Source Web Scraping for AI"
+description: "An honest comparison of Reader and Firecrawl for AI web scraping. Features, open source licensing, browser automation, and output quality compared."
+date: 2026-07-09
 author: "Nihal Kaul"
 category: "Comparisons"
 keywords:
   - "firecrawl alternative"
   - "reader vs firecrawl"
+  - "open source web scraping"
   - "web scraping for ai"
-  - "firecrawl comparison"
-  - "markdown scraping api"
 schemaType: "article"
 faq:
-  - question: "Is Reader a good Firecrawl alternative?"
-    answer: "Yes. Reader and Firecrawl both return clean markdown from any URL. Reader uses a faster Rust engine (Supermarkdown) for conversion, offers direct CDP browser sessions for Playwright and Puppeteer compatibility, and has a simpler API design with one unified endpoint."
-  - question: "What is the difference between Reader and Firecrawl?"
-    answer: "Both are web scraping APIs that return markdown. Key differences: Reader uses a Rust markdown engine (Supermarkdown), offers direct CDP browser sessions, and has a unified single-endpoint API. Firecrawl has more AI features (Agent, Search endpoints), more SDKs (9 languages), and a larger community."
-  - question: "Which is better for RAG pipelines, Reader or Firecrawl?"
-    answer: "Both work well for RAG pipelines since they return clean markdown. Reader's Supermarkdown engine produces higher quality output for complex pages (tables, nested lists, code blocks). Firecrawl's Search endpoint is useful if your RAG pipeline needs web search results alongside page content."
-  - question: "Can I self-host Reader or Firecrawl?"
-    answer: "Both can be self-hosted. Reader uses a permissive license, meaning you can modify the code for your own use without restrictions. Firecrawl uses AGPL-3.0, which requires you to open-source any modifications if you expose them over a network."
+  - question: "Is Reader open source?"
+    answer: "Yes. Reader is fully open source under the Apache 2.0 license. You can self host the entire platform on your own infrastructure, inspect every line of code, and modify it freely. There are no restrictions on commercial use. The managed cloud platform at reader.dev builds on the same open source core with 1,000 free credits per month."
+  - question: "Is Firecrawl open source?"
+    answer: "Firecrawl's core scraper is open source under the AGPL 3.0 license with 148K GitHub stars. However, the self hosted version does not include Fire Engine (their proprietary anti bot layer), the Agent endpoint, Browser Sandbox, or dashboards. These features are only available on the managed cloud platform."
+  - question: "Can Reader replace Firecrawl?"
+    answer: "For most use cases, yes. Reader handles scraping, crawling, and browser automation through a single API. It outputs clean markdown optimized for LLMs, supports JavaScript rendering and anti bot bypass, and includes full browser sessions with CDP compatibility that Firecrawl does not offer in the same way."
+  - question: "Which tool is better for RAG pipelines?"
+    answer: "Both tools produce clean markdown suitable for RAG pipelines. Reader outputs markdown by default through its Rust based Supermarkdown engine, which performs a single pass conversion in under 5 milliseconds per page. Firecrawl also produces good markdown output with additional AI extraction capabilities via its extract endpoint."
 ---
 
-Reader and Firecrawl solve the same core problem: turn any URL into clean, structured content that LLMs can work with. Both return markdown by default. Both handle JavaScript rendering. Both have crawl support.
+If you are building AI agents, RAG pipelines, or any application that needs clean web data, you have probably come across both Reader and Firecrawl. They solve the same core problem: turning messy web pages into structured, LLM ready content.
 
-But they take different approaches to get there, and those differences matter depending on what you are building. This article walks through the real differences, with code examples, so you can pick the right tool.
+This is a detailed comparison covering features, open source licensing, browser automation, output quality, and anti bot performance so you can decide which fits your workload.
 
-## Quick Comparison
+## What Each Tool Does
 
-| Feature | Reader | Firecrawl |
-|---------|--------|-----------|
-| Default output | Markdown | Markdown |
-| Markdown engine | [Supermarkdown](/blog/convert-website-to-markdown) (Rust) | Turndown (JavaScript) |
-| Crawl support | Yes (BFS, depth + page limits) | Yes (async, sitemap modes) |
-| Browser sessions | CDP WebSocket (Playwright/Puppeteer) | Interact endpoint (code + AI prompts) |
-| Anti-bot | Fingerprint generation + tiered proxies | Automatic + enhanced proxy mode |
-| AI extraction | JSON Schema + natural language | JSON Schema + Agent endpoint |
-| Web search | No | Yes (Search endpoint) |
-| SDKs | JavaScript, Python, CLI | JavaScript, Python, Go, Rust, Java, Ruby, .NET, PHP, Elixir |
-| MCP server | Yes (9 tools) | Yes (11 tools) |
-| Self-hostable | Yes | Yes |
+Both Reader and Firecrawl convert web pages into clean content that language models can work with. You give them a URL, they handle JavaScript rendering, anti bot protection, proxy rotation, and content extraction. You get back clean markdown instead of raw HTML filled with navigation menus, ad scripts, and cookie banners.
 
-## Markdown Output Quality
+That is where the similarity ends.
 
-Both Reader and Firecrawl return markdown, but they use different conversion engines under the hood. The difference shows up on complex pages.
+**Firecrawl** is a web scraping API built for AI workflows. It offers scraping, crawling, site mapping, monitoring, search, browser interactions (called Interact), and an AI agent feature currently in preview. It is backed by Y Combinator, has raised funding in a Series A, and has grown to over 148,000 GitHub stars with a large developer community. The project is maintained by Sideguide Technologies and operates a managed cloud platform at firecrawl.dev.
 
-**Reader** uses [Supermarkdown](https://supermarkdown.dev), a Rust library built specifically for HTML-to-markdown conversion. It parses HTML with html5ever (a browser-grade HTML5 spec parser from the Servo project), pre-computes node metadata in a single pass, and converts in O(n) time. This matters for tables with alignment, deeply nested lists, and code blocks that contain backticks.
+**Reader** is an open source web infrastructure platform designed for the AI era. It offers three core primitives today: read (scrape any URL to clean markdown), crawl (extract content across entire domains), and browse (full cloud browser sessions with CDP compatibility). Reader is Apache 2.0 licensed, fully self hostable, and includes a managed cloud platform at reader.dev.
 
-**Firecrawl** uses Turndown.js with the joplin-turndown-plugin-gfm plugin for table support. Turndown is well established and handles most cases correctly, but it runs in JavaScript and uses repeated DOM traversals for nested structures.
+## Scraping and Crawling
 
-Where you will notice the difference:
+Both tools handle the basics well. You pass a URL, you get clean markdown back. JavaScript rendering, anti bot bypass, and proxy rotation are handled automatically.
 
-- **Tables.** Supermarkdown reads `align` attributes and `text-align` CSS styles to produce correct GFM alignment syntax (`:---`, `:---:`, `---:`). Turndown's GFM plugin handles basic tables but does not extract alignment from styles.
-- **Code blocks.** Supermarkdown auto-detects the programming language from class patterns (`language-python`, `hljs-typescript`, `highlight-go`) and strips line number gutters from syntax highlighters. It also dynamically adjusts fence length when code contains backticks.
-- **Nested lists.** Supermarkdown pre-computes list indentation in a metadata pass, avoiding the repeated ancestor walks that slow down other converters on deeply nested content.
+Firecrawl offers additional endpoints for site mapping (discover all URLs on a domain) and monitoring (track page changes over time) that Reader does not have yet. If you need to discover all URLs before crawling, Firecrawl's map endpoint is useful and costs one credit per call.
 
-For simple pages, both produce similar output. For documentation sites, technical blogs, and pages with complex formatting, Supermarkdown produces cleaner results.
+Firecrawl also offers a search endpoint that lets you search the web and get full content from results in a single call. This is a capability Reader does not currently offer but is on the roadmap.
 
-## Crawling
+Reader's scraping is powered by Supermarkdown, a purpose built HTML to markdown conversion engine written in Rust. It performs a single pass O(n) traversal of the DOM and converts a typical webpage in under 5 milliseconds. This is 10 to 50 times faster than JavaScript based converters like Turndown.js. At high volume, this speed difference compounds. Supermarkdown is open source under the MIT license and available as both a Rust crate and an npm package at supermarkdown.dev.
 
-Both tools support crawling entire websites, but they work differently.
+Firecrawl uses its own conversion pipeline, which also produces clean markdown output. For most use cases, both tools deliver good output quality.
 
-**Reader's crawl** uses breadth-first search to discover and scrape pages. You set `maxDepth` (1-10) and `maxPages` (1-10,000), and Reader discovers links, queues them, and scrapes each page asynchronously. Jobs return a `jobId` that you poll for results.
+### Reader SDK Example
 
 ```python
 from reader_py import ReaderClient
 
 client = ReaderClient(api_key="rdr_your_key")
-result = client.read(
-    url="https://docs.example.com",
-    max_depth=3,
-    max_pages=50,
-)
-
-# Poll for results
-job = client.get_job_status(result.job_id)
-for page in job.data:
-    print(page.url, len(page.markdown))
+result = client.read(url="https://example.com")
+print(result.data.markdown)
 ```
 
-**Firecrawl's crawl** is also async with job polling. It adds sitemap awareness with three modes: `include` (default, combines link discovery with sitemap), `skip` (HTML only), and `only` (sitemap entries only). It also supports regex-based URL filtering with `includePaths` and `excludePaths`.
+```javascript
+import { ReaderClient } from "@vakra-dev/reader-js";
 
-```python
-from firecrawl import FirecrawlApp
-
-app = FirecrawlApp(api_key="fc-your_key")
-result = app.crawl_url(
-    "https://docs.example.com",
-    params={
-        "maxDiscoveryDepth": 3,
-        "limit": 50,
-        "includePaths": ["/docs/.*"],
-    },
-)
-
-for page in result["data"]:
-    print(page["metadata"]["url"], len(page["markdown"]))
+const reader = new ReaderClient({ apiKey: "rdr_your_key" });
+const result = await reader.read({ url: "https://example.com" });
+console.log(result.data.markdown);
 ```
 
-The key difference is sitemap support. If the site you are crawling has a well-maintained sitemap, Firecrawl's `sitemapOnly` mode can discover pages faster than BFS link following. For sites without sitemaps (or with incomplete ones), both tools rely on link discovery and produce similar results.
+Or via cURL:
+
+```bash
+curl -X POST https://api.reader.dev/v1/read \
+  -H "x-api-key: rdr_YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
 
 ## Browser Automation
 
-This is where the two tools diverge significantly.
+This is the biggest practical difference between the two platforms.
 
-**Reader** gives you direct access to a cloud browser via the Chrome DevTools Protocol. You create a session and get back a CDP WebSocket URL. Your existing [Playwright or Puppeteer](/blog/best-web-scraping-api) scripts connect to it with zero changes. The browser runs in the cloud with stealth configuration and proxies already set up.
+**Reader** includes cloud browser sessions as a first class primitive. You create a session through the API and get back a CDP (Chrome DevTools Protocol) endpoint. Your existing Playwright or Puppeteer scripts connect directly without modification. You can log into portals, navigate authenticated dashboards, fill forms, download files, and hold sessions for extended periods. The browser includes anti detection features including TLS fingerprinting, navigator spoofing, and WebRTC masking.
 
 ```javascript
 import { ReaderClient } from "@vakra-dev/reader-js";
 import { chromium } from "playwright";
 
 const reader = new ReaderClient({ apiKey: "rdr_your_key" });
-const session = await reader.createSession({ duration: 300 });
+const session = await reader.sessions.create({ maxDurationMs: 300000 });
 
-// Connect your existing Playwright code
-const browser = await chromium.connectOverCDP(session.cdpUrl);
+const browser = await chromium.connectOverCDP(session.wsEndpoint);
 const page = browser.contexts()[0].pages()[0];
-
 await page.goto("https://example.com/dashboard");
 await page.click("#load-more");
 const content = await page.content();
 ```
 
-This is a real browser session. You can navigate, click, fill forms, take screenshots, and run any Playwright or Puppeteer code against it.
+```python
+from reader_py import ReaderClient
+from playwright.sync_api import sync_playwright
 
-**Firecrawl's Interact** endpoint takes a different approach. After scraping a page, you can send follow-up commands to interact with it. Commands can be natural language prompts (resolved by AI) or code snippets (Node.js, Python, or Bash executed in a sandbox).
+client = ReaderClient(api_key="rdr_your_key")
+session = client.sessions.create(max_duration_ms=300000)
 
-```javascript
-import FirecrawlApp from "@mendable/firecrawl-js";
-
-const app = new FirecrawlApp({ apiKey: "fc-your_key" });
-
-// Scrape first
-const scrape = await app.scrapeUrl("https://example.com/dashboard");
-
-// Then interact
-const result = await app.interact(scrape.id, {
-  prompt: "Click the 'Load More' button and wait for new content",
-});
+with sync_playwright() as p:
+    browser = p.chromium.connect_over_cdp(session.ws_endpoint)
+    page = browser.contexts[0].pages[0]
+    page.goto("https://example.com/dashboard")
 ```
 
-The Interact endpoint also returns a `cdpUrl` for raw CDP access, but it is designed primarily around the prompt and code execution model.
+**Firecrawl** offers browser interactions through its Interact endpoint, which supports actions like clicking, scrolling, writing text, waiting for elements, and pressing keys before extracting content. It also has an Agent endpoint in preview that can perform multi step browser tasks autonomously. However, Firecrawl does not expose raw CDP sessions. You cannot connect your own Playwright or Puppeteer scripts to a Firecrawl hosted browser. You work within the actions that Firecrawl's API supports.
 
-**Which is better?** If you have existing Playwright or Puppeteer code and want to run it in the cloud with stealth and proxies, Reader's direct CDP sessions are simpler. If you want AI-driven browser interaction without writing automation code, Firecrawl's prompt-based Interact is a different (and interesting) approach.
+For teams that already have Playwright or Puppeteer automation scripts, or need full browser control for complex authenticated workflows, Reader's CDP approach is significantly more flexible. For simple interactions before a scrape (click a button, scroll to load content, dismiss a popup), Firecrawl's Interact endpoint handles the job.
 
-## Anti-Bot and Proxy Handling
+Worth noting: TinyFish's blog, citing independent testing by Proxyway, reports Firecrawl's success rate at roughly 34% on heavily protected sites at 2 requests per second. Scrapeway's June 2026 benchmark measured Firecrawl at 63% success across 12 target websites. Anti bot performance varies significantly by target site and both numbers should be considered directional rather than definitive.
 
-Both tools handle anti-bot protection automatically, but with different levels of control.
+## AI Extraction
 
-**Reader** uses a two-tier proxy system. Standard mode routes through dedicated ISP proxies with browser fingerprint generation. Premium mode adds residential proxies for heavily protected sites. You choose the mode per request. Reader also uses `--headless=new` with fingerprint-generator to produce consistent browser fingerprints that match real Chrome profiles.
+**Firecrawl** has a mature `/extract` endpoint that uses AI to pull structured data from pages based on natural language prompts or Pydantic schema definitions. This is one of Firecrawl's strongest features and works well for pulling specific fields like product names, prices, and descriptions from pages without writing any parsing logic.
 
-**Firecrawl** handles anti-bot automatically with an optional "enhanced proxy" mode for difficult sites. The specific proxy infrastructure is not documented in detail. From GitHub issues, some users report getting stuck in anti-bot loops on certain sites, suggesting the bypass is less granular than dedicated anti-bot tools.
+**Reader** is shipping structured extraction that lets you pass a JSON schema alongside your URL and get back validated, typed JSON. This is currently in development and will be available soon.
 
-Neither tool matches the anti-bot depth of [specialized services like ZenRows](/blog/reader-vs-zenrows), which has 25+ articles documenting bypass techniques for specific anti-bot vendors. But both handle the majority of sites without extra configuration.
+If AI extraction is your primary need today, Firecrawl has the more mature offering.
 
-## AI and Extraction Features
+## Open Source and Licensing
 
-Firecrawl has more AI features built into the platform.
+This is where the two tools diverge fundamentally and where the choice may be made for you by your legal or compliance team.
 
-**Firecrawl's Agent endpoint** is an autonomous web research tool. You describe what you want in natural language, and the agent searches the web, navigates sites, and extracts structured data. It uses two models: spark-1-mini (cheaper, simpler tasks) and spark-1-pro (complex reasoning). This is a genuinely different capability, useful for research tasks where you do not know the exact URLs upfront.
+**Reader** is fully open source under the **Apache 2.0 license**. The entire platform is available on GitHub: the scraping engine, crawling infrastructure, browser pool management, anti bot features, and the Supermarkdown conversion engine. You can clone the repository, deploy it on your own servers, modify the code, and use it commercially without any restriction. Apache 2.0 does not require you to open source your own code, even if you modify Reader or integrate it into a commercial product.
 
-**Firecrawl's Search endpoint** queries the web and returns full-page content for each result. This is useful for [RAG pipelines](/blog/scrape-website-to-markdown) where you need to search for information and then extract it.
+**Firecrawl** is open source under the **AGPL 3.0 license** (copyright held by Sideguide Technologies Inc). The core scraper is available on GitHub with 148,000 stars and 8,500 forks. However, the self hosted version is a subset of the cloud product. Features that are only available on the managed platform and not included in the open source build include:
 
-**Reader's Extract** uses GPT-4.1-nano with either a JSON Schema or natural language prompt to extract structured data from a page. It is simpler and more focused than Firecrawl's Agent, designed for extracting specific fields from known page structures rather than open-ended research.
+- Fire Engine, Firecrawl's proprietary anti bot and proxy layer
+- The Agent endpoint
+- Browser Sandbox
+- Dashboards and administrative UI
 
-If you need autonomous web research or integrated search, Firecrawl has more to offer here. If you need straightforward structured extraction from known URLs, both tools work well.
+The AGPL 3.0 license has specific implications for commercial use. If you deploy AGPL licensed software as a network service (which a scraping API would be), you may be required to release your application's source code under the same license. This is a meaningful consideration for commercial products. Many teams either purchase an enterprise license from Firecrawl or use the managed API to avoid the AGPL requirements.
 
-## API Design
+For teams operating in regulated environments, building commercial products around scraping infrastructure, or requiring full self hosted deployments with no feature gaps, Reader's Apache 2.0 approach provides meaningfully more freedom.
 
-The two APIs have fundamentally different designs.
+## Community and Ecosystem
 
-**Reader** uses a single endpoint (`POST /v1/read`) where the behavior changes based on parameters. Pass a single `url` and you get a synchronous scrape. Pass an array of `urls` and you get a batch job. Add `maxDepth` and you get a crawl. Add `extract` and you get structured data. One endpoint, multiple modes.
+**Firecrawl** has a significantly larger community. With 148,000 GitHub stars, active Discord, and integrations with LangChain, LlamaIndex, CrewAI, n8n, Zapier, Make, and an MCP server for AI coding tools, it has the broadest ecosystem in the AI scraping space. Firecrawl has been in market longer and has more third party tutorials, guides, and community resources.
 
-**Firecrawl** uses separate endpoints for each operation: `/v2/scrape`, `/v2/crawl`, `/v2/map`, `/v2/search`, `/v2/extract`, `/v2/agent`. Each has its own request and response format.
+**Reader** is a newer project with a growing community. It has SDKs for JavaScript and Python, an MCP server, and a REST API. LangChain and LlamaIndex work through Reader's SDK. The community is smaller but active, with consistent development and regular releases.
 
-Neither approach is objectively better. Reader's unified design means fewer endpoints to learn. Firecrawl's separate endpoints make each operation's parameters and responses more explicit. It is a design preference.
+If breadth of ecosystem and community support is your top priority today, Firecrawl has a clear lead. Reader is growing but is not at the same scale.
 
-## SDK and Community
+## Performance
 
-Firecrawl has a larger community and broader SDK coverage. With approximately 148,000 GitHub stars and SDKs for 9 languages (JavaScript, Python, Go, Rust, Java, Ruby, .NET, PHP, Elixir), it has more integration options. Reader has SDKs for JavaScript and Python, plus a CLI and MCP server.
+Reader's Supermarkdown engine, built in Rust, processes HTML to markdown conversion in under 5 milliseconds per page with a single pass O(n) DOM traversal. This is a measurable performance advantage for high volume workloads where conversion speed directly affects throughput.
 
-Both have [MCP servers](/blog/reader-mcp-server) that work with Claude Code, Cursor, and other MCP-compatible tools. Firecrawl exposes 11 tools (including Agent and Interact), Reader exposes 9 tools (including session creation and credit checking).
+Firecrawl does not publicly benchmark its conversion speed, but users generally report good performance for standard workloads. Scrapeway's benchmark measured an average response time of 5.9 seconds across 12 target sites, though this includes network latency, rendering, and anti bot processing, not just the conversion step.
 
-For most AI development work, JavaScript and Python SDKs cover the majority of use cases. If you need Go, Rust, or Java SDKs, Firecrawl has them and Reader does not.
+## When to Pick Each Tool
 
-## When to Use Reader
+### Choose Firecrawl if:
 
-Reader is the better choice when:
+You need the broadest third party integration ecosystem available today. Your primary need is AI extraction with natural language prompts and Firecrawl's mature extract endpoint fits your workflow. You want site mapping and monitoring features that Reader does not have yet. You are comfortable with AGPL 3.0 licensing or plan to use the managed API exclusively.
 
-- **Markdown quality matters.** [Supermarkdown's](https://supermarkdown.dev) Rust engine produces cleaner output on complex pages, especially tables, nested lists, and code blocks.
-- **You need browser sessions.** Direct CDP access means your existing Playwright or Puppeteer scripts work with zero changes.
-- **You want to self-host.** Reader's permissive license lets you modify and deploy without restrictions.
-- **You want a simpler API.** One endpoint, clear parameters, predictable behavior.
+### Choose Reader if:
 
-## When to Use Firecrawl
+You need full browser automation with CDP access for Playwright and Puppeteer scripts. You require Apache 2.0 licensing for commercial use without copyleft restrictions. You want to self host the complete platform without feature gaps. You need the fastest possible HTML to markdown conversion for high volume pipelines. You value transparent, predictable infrastructure where what you see in open source is what you get.
 
-Firecrawl is the better choice when:
+## Getting Started with Reader
 
-- **You need web search integrated with scraping.** The Search endpoint queries the web and extracts content in one call.
-- **You want autonomous web research.** The Agent endpoint with spark-1 models can research topics without predefined URLs.
-- **You need SDKs beyond Python and JavaScript.** Nine language SDKs cover more integration scenarios.
-- **You want sitemap-aware crawling.** The `sitemapOnly` crawl mode is useful for sites with well-maintained sitemaps.
+Reader's free tier includes 1,000 credits per month with no credit card required. You can try the instant markdown converter at [reader.dev/markdown](https://reader.dev/markdown) to see output quality before signing up for the API.
+
+Full documentation is at [docs.reader.dev](https://docs.reader.dev). Source code is on [GitHub](https://github.com/vakra-dev/reader).
 
 ## Conclusion
 
-Reader and Firecrawl are both strong tools for turning web pages into LLM-ready content. The core difference is philosophical: Reader focuses on doing scraping, crawling, and browser automation well with the best possible markdown output. Firecrawl focuses on being a broader AI platform with search, autonomous agents, and more integration options.
+Reader and Firecrawl both solve the fundamental problem of making the web readable for AI systems. They approach it differently: Firecrawl with a larger ecosystem and mature AI extraction, Reader with genuine open source licensing, full browser automation, and a performance focused Rust engine.
 
-For most AI developers who need clean markdown from URLs, both will work. Try them and see which fits your workflow. Check the [Reader documentation](https://docs.reader.dev) or the [Firecrawl documentation](https://docs.firecrawl.dev) to get started.
+The right choice depends on your specific requirements. For teams that need maximum ecosystem breadth and AI extraction today, Firecrawl is the more established option. For teams that need Apache 2.0 licensing, CDP browser sessions, self hosting without feature gaps, or the fastest conversion pipeline, Reader is built specifically for those needs.
+
+Try both. The free tiers are generous enough to test with your actual use cases. Let the output and the experience decide.

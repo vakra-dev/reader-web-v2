@@ -1,0 +1,222 @@
+---
+title: "Crawl an Entire Website to Markdown in One Command"
+description: "Crawl any website and get clean markdown for every page. Documentation indexing, content migration, RAG pipelines, and competitive analysis."
+date: 2026-07-09
+author: "Nihal Kaul"
+category: "Guides"
+keywords:
+  - "crawl website to markdown"
+  - "website crawler markdown"
+  - "crawl site to md"
+  - "site crawler for llm"
+schemaType: "howto"
+faq:
+  - question: "How many credits does crawling cost?"
+    answer: "Each scraped page costs 1 credit (standard) or 3 credits (premium proxy). Discovery only mode (urls-only) costs 1 credit flat for the entire job regardless of how many URLs are found. Cache hits are free."
+  - question: "Can Reader crawl JavaScript rendered sites?"
+    answer: "Yes. Each discovered page is rendered with a headless browser before content extraction and markdown conversion. React, Vue, Next.js, and other JavaScript framework sites are handled automatically."
+  - question: "What is the maximum crawl size?"
+    answer: "The hosted API supports maxPages up to 10,000. The self hosted version has no limit. For very large crawls, monitor the async job status and consider breaking the crawl into smaller segments using includePatterns."
+  - question: "Does crawling respect robots.txt?"
+    answer: "Yes. The crawler checks robots.txt before scraping each URL and skips pages that are disallowed."
+---
+
+Sometimes you need every page on a website as clean markdown. A documentation site for your RAG pipeline. A competitor's marketing site for analysis. Your own site for content migration. Reader's crawl primitive handles this in one command or one API call: set the URL, configure depth and page limits, and get back clean markdown for every discovered page.
+
+## How Reader Crawl Works
+
+Reader's crawler uses breadth first search (BFS) to discover pages starting from a seed URL. It fetches the seed page, extracts all links from the DOM, filters them (same domain only, not yet visited, matches include patterns, does not match exclude patterns, allowed by robots.txt), and adds them to the queue at depth plus one.
+
+The crawler processes the queue level by level, stopping when the queue is empty, the maximum depth is reached, or the maximum page count is hit. Every discovered page is scraped and converted to clean markdown through Supermarkdown.
+
+Key behaviors: the crawler stays on the same domain and never follows links to external sites. Deduplication prevents scraping the same URL twice. A configurable delay between requests respects the target server's capacity. Robots.txt is respected by default.
+
+## Using the CLI
+
+The CLI is the fastest way to crawl a site.
+
+```bash
+# Install
+npm install -g @vakra-dev/reader-cli
+
+# Basic crawl (defaults: max depth 2, max pages 20)
+npx reader crawl https://docs.example.com
+
+# Crawl with custom limits
+npx reader crawl https://docs.example.com \
+  --max-depth 3 \
+  --max-pages 100 \
+  --scrape
+
+# Filter by URL pattern
+npx reader crawl https://docs.example.com \
+  --max-depth 3 \
+  --max-pages 100 \
+  --include "docs/*" \
+  --exclude "admin/*" "internal/*"
+
+# Discover URLs only (no scraping, 1 credit flat)
+npx reader crawl https://docs.example.com --urls-only
+```
+
+The `--urls-only` flag runs discovery without scraping, returning a list of all URLs found on the site. This costs 1 credit flat regardless of how many URLs are discovered. Useful for understanding a site's structure before committing to a full crawl.
+
+## Using the Python SDK
+
+```python
+from reader_py import ReaderClient
+
+client = ReaderClient(api_key="rdr_your_key")
+
+# Start the crawl
+result = client.read(
+    url="https://docs.example.com",
+    max_depth=3,
+    max_pages=100
+)
+
+# Crawls run asynchronously
+# The SDK handles polling automatically
+for page in result.data:
+    print(f"{page.url}: {len(page.markdown)} chars")
+    
+    # Save each page as a markdown file
+    filename = page.url.split("/")[-1] or "index"
+    with open(f"output/{filename}.md", "w") as f:
+        f.write(f"# {page.metadata.title}\n\n")
+        f.write(page.markdown)
+```
+
+The Python SDK (`reader-py`, v0.2.0) returns a discriminated result object. Single URL requests return a synchronous scrape result (`kind: "scrape"`). Requests with `max_depth` or `max_pages` return an async job (`kind: "job"`) and the SDK polls for completion automatically.
+
+## Using the JavaScript SDK
+
+```javascript
+import { ReaderClient } from '@vakra-dev/reader-js';
+
+const reader = new ReaderClient({ apiKey: 'rdr_your_key' });
+
+const result = await reader.read({
+  url: 'https://docs.example.com',
+  maxDepth: 3,
+  maxPages: 100
+});
+
+for (const page of result.data) {
+  console.log(`${page.url}: ${page.markdown.length} chars`);
+}
+```
+
+The JavaScript SDK (`@vakra-dev/reader-js`, v0.2.0) follows the same pattern as Python with automatic async job polling.
+
+## Common Crawling Patterns
+
+### Documentation Indexing
+
+Crawl a documentation site and save every page as markdown for a RAG pipeline or search index.
+
+```python
+result = client.read(
+    url="https://docs.example.com",
+    max_depth=3,
+    max_pages=200,
+)
+
+# Combine all pages into one file for context
+combined = ""
+for page in result.data:
+    combined += f"\n\n---\n\n# {page.metadata.title}\n\n"
+    combined += f"Source: {page.url}\n\n"
+    combined += page.markdown
+
+with open("docs_complete.md", "w") as f:
+    f.write(combined)
+```
+
+Typical configuration: maxDepth 3, maxPages 200, include patterns for the docs path. This captures the full documentation hierarchy without wandering into blog posts or marketing pages.
+
+### Content Migration
+
+Crawl your old CMS site and extract clean markdown for every page, ready to import into your new system.
+
+```python
+result = client.read(
+    url="https://old-site.example.com",
+    max_depth=5,
+    max_pages=1000,
+)
+
+for page in result.data:
+    # Preserve directory structure
+    path = page.url.replace("https://old-site.example.com", "")
+    # Save with metadata
+    with open(f"migration/{path}.md", "w") as f:
+        f.write(f"---\n")
+        f.write(f"title: {page.metadata.title}\n")
+        f.write(f"source: {page.url}\n")
+        f.write(f"scraped: {page.metadata.scraped_at}\n")
+        f.write(f"---\n\n")
+        f.write(page.markdown)
+```
+
+Typical configuration: maxDepth 5, maxPages 1000. Higher depth because CMS sites often have deep page hierarchies.
+
+### Competitive Analysis
+
+Crawl a competitor's marketing site and extract their messaging, features, and positioning.
+
+```python
+result = client.read(
+    url="https://competitor.example.com",
+    max_depth=2,
+    max_pages=50,
+)
+
+# Focus on key pages
+for page in result.data:
+    if any(keyword in page.url for keyword in ["features", "pricing", "about", "product"]):
+        print(f"\n=== {page.url} ===\n")
+        print(page.markdown[:2000])
+```
+
+Typical configuration: maxDepth 2, maxPages 50, include patterns for marketing pages. Shallow depth because marketing sites are typically flat, with most important content within 2 clicks of the homepage.
+
+### Knowledge Base Building
+
+Crawl multiple related sites and combine them into a single knowledge base for an LLM.
+
+```python
+sites = [
+    "https://docs.framework-a.dev",
+    "https://docs.framework-b.dev",
+    "https://docs.framework-c.dev",
+]
+
+all_pages = []
+for site in sites:
+    result = client.read(url=site, max_depth=2, max_pages=100)
+    all_pages.extend(result.data)
+
+print(f"Total pages: {len(all_pages)}")
+# Chunk, embed, and store for RAG
+```
+
+## Tips
+
+**Start with low limits.** Begin with maxDepth 2 and maxPages 20. Review the results before increasing. A site with 50 links per page at depth 3 could discover 125,000 pages. The maxPages parameter prevents this from spiraling.
+
+**Use includePatterns to focus.** Crawling an entire e-commerce site when you only need the blog wastes credits. Use patterns like `blog/*` or `docs/*` to target the content you want.
+
+**Cache hits are free.** Re crawling a site you recently crawled costs zero credits for pages that have not changed. Reader caches responses and serves cached results at no charge.
+
+**Monitor large crawls.** Crawls with 100+ pages run asynchronously. Use `reader_job_status` (via MCP) or the SDK's automatic polling to track progress and catch failures early.
+
+**Depth grows exponentially.** MaxDepth 2 on a site with 50 links per page discovers up to 2,500 pages. MaxDepth 3 discovers up to 125,000. Always pair depth with a maxPages cap.
+
+Reader offers 1,000 free pages per month at [reader.dev](https://reader.dev). Full documentation is at [docs.reader.dev](https://docs.reader.dev). Source code is on [GitHub](https://github.com/vakra-dev/reader).
+
+## Conclusion
+
+Full site crawling to markdown is a common need for documentation indexing, RAG pipeline building, content migration, and competitive analysis. Reader's crawl primitive handles the entire process: BFS discovery, JavaScript rendering, anti bot bypass, content extraction, and markdown conversion for every discovered page.
+
+One command for the CLI. One function call for the SDK. One API request for the REST endpoint. Same clean markdown output regardless of how you access it.

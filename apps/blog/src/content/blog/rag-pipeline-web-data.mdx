@@ -1,0 +1,301 @@
+---
+title: "Building a RAG Pipeline with Live Web Data"
+description: "Build a complete RAG pipeline using live web data. From scraping with Reader to chunking, embedding, and retrieval with LangChain."
+date: 2026-07-09
+author: "Nihal Kaul"
+category: "Use Cases"
+keywords:
+  - "rag pipeline web data"
+  - "rag web scraping"
+  - "live web data rag"
+  - "web data for retrieval"
+schemaType: "howto"
+faq:
+  - question: "Does markdown improve RAG retrieval quality?"
+    answer: "Clean markdown chunks better than raw HTML because structural markers like headings are explicit and noise is removed. Multiple sources report that clean markdown reduces token usage by 67 to 87% compared to HTML, which means more useful content fits within each chunk and within the LLM's context window."
+  - question: "What embedding model should I use?"
+    answer: "OpenAI text-embedding-3-small is the default starting point. For multilingual or long context needs, Cohere embed-v4 supports 128K tokens and 100+ languages. For open source, Qwen3-Embedding-8B ranks first on the MTEB multilingual leaderboard under Apache 2.0."
+  - question: "How often should I re crawl?"
+    answer: "Match the crawl frequency to how fast your sources change. Documentation sites: weekly. News sites: daily. Product pages: daily. Reader's caching means re crawls only charge for pages that have changed."
+  - question: "How many chunks should I retrieve?"
+    answer: "Start with k=5. Increase to 10 or 15 if answers are incomplete or miss relevant context. For complex questions that span multiple topics, add a reranker to improve precision without reducing recall."
+---
+
+Most RAG tutorials use static PDFs or text files as their data source. But the most valuable information is live on the web: documentation that updates weekly, competitor pages that change daily, news that breaks hourly. A RAG pipeline built on static documents goes stale the moment it is deployed.
+
+This guide shows how to build a RAG pipeline that ingests live web data, from scraping through embedding to retrieval, using Reader for web access and LangChain for the pipeline.
+
+## The Architecture
+
+A live web RAG pipeline has five stages.
+
+**Scrape.** Fetch web pages and get clean markdown. Reader handles JavaScript rendering, anti bot bypass, and content extraction automatically.
+
+**Chunk.** Split the markdown into retrieval sized pieces. Too large and the chunks contain irrelevant information. Too small and they lack context.
+
+**Embed.** Convert each chunk into a vector using an embedding model.
+
+**Store.** Save the vectors in a database that supports similarity search.
+
+**Retrieve and Generate.** Given a query, find the most relevant chunks and pass them to an LLM to generate an answer.
+
+The complete flow: URL -> Reader -> Markdown -> Text Splitter -> Chunks -> Embedding Model -> Vector Database -> Retriever -> LLM -> Answer.
+
+## Step 1: Scrape Web Content with Reader
+
+Two approaches depending on your data source.
+
+### Single Pages
+
+When you know the specific URLs you need:
+
+```python
+from reader_py import ReaderClient
+
+client = ReaderClient(api_key="rdr_your_key")
+
+urls = [
+    "https://docs.example.com/getting-started",
+    "https://docs.example.com/authentication",
+    "https://docs.example.com/api-reference",
+]
+
+pages = []
+for url in urls:
+    result = client.read(url=url)
+    pages.append({
+        "url": url,
+        "content": result.data.markdown,
+        "title": result.data.metadata.title
+    })
+```
+
+### Full Site Crawl
+
+When you want to index an entire documentation site or knowledge base:
+
+```python
+result = client.read(
+    url="https://docs.example.com",
+    max_depth=3,
+    max_pages=100
+)
+
+pages = [{
+    "url": page.url,
+    "content": page.markdown,
+    "title": page.metadata.title
+} for page in result.data]
+
+print(f"Scraped {len(pages)} pages")
+```
+
+Reader returns clean markdown with document structure preserved. Headings, lists, tables, links, and code blocks are all intact. Navigation, ads, scripts, footers, and boilerplate are stripped. This matters for the next step because clean markdown chunks significantly better than raw HTML.
+
+## Step 2: Chunk the Content
+
+Embedding models have limited input (typically 8K tokens). Entire pages are too large. You need chunks that are self contained and semantically coherent.
+
+The most effective strategy for markdown content is two level splitting.
+
+### Split on Headings First
+
+MarkdownHeaderTextSplitter splits the document at heading boundaries and preserves the heading hierarchy as metadata on each chunk. A section under `## Authentication > ### OAuth 2.0` becomes a chunk with metadata `{h2: "Authentication", h3: "OAuth 2.0"}`.
+
+```python
+from langchain.text_splitter import MarkdownHeaderTextSplitter
+
+headers_to_split_on = [
+    ("#", "h1"),
+    ("##", "h2"),
+    ("###", "h3"),
+]
+
+md_splitter = MarkdownHeaderTextSplitter(
+    headers_to_split_on=headers_to_split_on
+)
+
+all_docs = []
+for page in pages:
+    docs = md_splitter.split_text(page["content"])
+    # Add source URL as metadata
+    for doc in docs:
+        doc.metadata["source"] = page["url"]
+        doc.metadata["title"] = page["title"]
+    all_docs.extend(docs)
+```
+
+### Then Split by Size
+
+Some sections are still too long after heading based splitting. Apply a recursive splitter to enforce a maximum chunk size.
+
+```python
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200,
+    separators=["\n\n", "\n", " ", ""]
+)
+
+chunks = text_splitter.split_documents(all_docs)
+print(f"Created {len(chunks)} chunks from {len(pages)} pages")
+```
+
+The `chunk_overlap` of 200 ensures that content at chunk boundaries is not lost. The recursive splitter tries to split on paragraph breaks first, then line breaks, then spaces, preserving as much semantic coherence as possible.
+
+**Best practice:** Measure chunk size in tokens, not characters. A 1,000 character chunk might be 200 tokens or 400 tokens depending on the content. Use tiktoken to count tokens for your target model.
+
+## Step 3: Embed and Store
+
+### Choosing an Embedding Model
+
+For most use cases, OpenAI's `text-embedding-3-small` is the default starting point with configurable dimensions (256 to 1536).
+
+For multilingual content or very long documents, Cohere `embed-v4` supports 128K token context (the largest of major commercial models) and over 100 languages.
+
+For open source and self hosted deployments, Qwen3-Embedding-8B ranks first on the MTEB multilingual leaderboard (as of June 2025) with Apache 2.0 licensing and 32K token context.
+
+### Storing the Vectors
+
+```python
+from langchain_openai import OpenAIEmbeddings
+from langchain_chroma import Chroma
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+
+vectorstore = Chroma.from_documents(
+    chunks,
+    embeddings,
+    persist_directory="./chroma_db"
+)
+
+print(f"Stored {len(chunks)} vectors")
+```
+
+Chroma is the fastest to prototype with because it runs embedded (no server to manage). For production, consider Qdrant (Rust, fast, generous free tier), Pinecone (managed, serverless), or pgvector (if you are already on PostgreSQL).
+
+## Step 4: Retrieve and Generate
+
+### Basic Retrieval
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.chains import RetrievalQA
+
+llm = ChatOpenAI(model="gpt-4.1-mini")
+
+qa_chain = RetrievalQA.from_chain_type(
+    llm=llm,
+    chain_type="stuff",
+    retriever=vectorstore.as_retriever(search_kwargs={"k": 5})
+)
+
+answer = qa_chain.invoke("How do I configure OAuth 2.0 authentication?")
+print(answer["result"])
+```
+
+The retriever finds the 5 most similar chunks to the query and passes them to the LLM as context. The LLM generates an answer grounded in the retrieved content.
+
+### Better Retrieval with Reranking
+
+For production RAG, add a reranker between retrieval and generation. The retriever casts a wide net (top 20 results), and the reranker scores each result for relevance, passing only the best 5 to the LLM.
+
+```python
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain_cohere import CohereRerank
+
+reranker = CohereRerank(model="rerank-v3.5", top_n=5)
+
+compression_retriever = ContextualCompressionRetriever(
+    base_compressor=reranker,
+    base_retriever=vectorstore.as_retriever(search_kwargs={"k": 20})
+)
+
+qa_chain = RetrievalQA.from_chain_type(
+    llm=llm,
+    chain_type="stuff",
+    retriever=compression_retriever
+)
+```
+
+Reranking significantly improves answer precision, especially when the vector store contains hundreds of documents on related topics.
+
+## Keeping the Pipeline Fresh
+
+Static RAG pipelines go stale. Live web RAG pipelines need a refresh strategy.
+
+**Schedule regular crawls.** Documentation sites change weekly. News sites change daily. Product pages change daily. Set a crawl schedule that matches how fast your sources update.
+
+**Use caching.** Reader caches responses and serves cached results at zero credit cost. Re crawling a site you recently crawled only charges for pages that have changed. This makes frequent re crawls affordable.
+
+**Track changes.** Compare new markdown with previously stored markdown. Only re embed chunks that have actually changed. This saves embedding costs and prevents unnecessary vector store churn.
+
+**Upsert, do not rebuild.** When a page changes, update the corresponding chunks in the vector store. When a page is removed, delete its chunks. Do not rebuild the entire index on every refresh.
+
+## The Complete Pipeline
+
+Putting it all together in one runnable script:
+
+```python
+from reader_py import ReaderClient
+from langchain.text_splitter import (
+    MarkdownHeaderTextSplitter,
+    RecursiveCharacterTextSplitter
+)
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_chroma import Chroma
+from langchain.chains import RetrievalQA
+
+# 1. Scrape
+client = ReaderClient(api_key="rdr_your_key")
+result = client.read(
+    url="https://docs.example.com",
+    max_depth=2,
+    max_pages=50
+)
+
+# 2. Chunk
+headers = [("#", "h1"), ("##", "h2"), ("###", "h3")]
+md_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers)
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000, chunk_overlap=200
+)
+
+all_chunks = []
+for page in result.data:
+    docs = md_splitter.split_text(page.markdown)
+    for doc in docs:
+        doc.metadata["source"] = page.url
+    chunks = text_splitter.split_documents(docs)
+    all_chunks.extend(chunks)
+
+print(f"Created {len(all_chunks)} chunks from {len(result.data)} pages")
+
+# 3. Embed and Store
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+vectorstore = Chroma.from_documents(all_chunks, embeddings)
+
+# 4. Query
+qa = RetrievalQA.from_chain_type(
+    llm=ChatOpenAI(model="gpt-4.1-mini"),
+    retriever=vectorstore.as_retriever(search_kwargs={"k": 5})
+)
+
+while True:
+    question = input("\nAsk a question (or 'quit'): ")
+    if question.lower() == "quit":
+        break
+    answer = qa.invoke(question)
+    print(f"\n{answer['result']}")
+```
+
+This script crawls a documentation site, chunks the content, embeds and stores the vectors, and provides an interactive query loop. The entire pipeline runs in under a minute for a 50 page documentation site.
+
+Reader offers 1,000 free pages per month at [reader.dev](https://reader.dev). Full documentation is at [docs.reader.dev](https://docs.reader.dev).
+
+## Conclusion
+
+Building a RAG pipeline with live web data follows the same scrape, chunk, embed, store, retrieve pattern as any RAG pipeline. The difference is the data source: instead of static files, you are working with live web content that Reader scrapes and converts to clean markdown automatically.
+
+Clean markdown from Reader chunks better than raw HTML because structural markers (headings, lists) are explicit and noise (navigation, scripts, ads) is already removed. This improves both chunk quality and retrieval accuracy throughout the pipeline.

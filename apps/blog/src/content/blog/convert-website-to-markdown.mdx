@@ -1,368 +1,278 @@
 ---
 title: "How to Convert Any Website to Clean Markdown"
-description: "Learn how to convert web pages to clean markdown using Python, JavaScript, and APIs. Covers Turndown, html2text, Readability, and Reader."
-date: 2026-07-08
+description: "Six methods to convert web pages to clean markdown for LLMs, RAG, and content processing. Covers Turndown.js, Python libraries, Supermarkdown, and more."
+date: 2026-07-09
 author: "Nihal Kaul"
 category: "Guides"
 keywords:
   - "convert website to markdown"
-  - "html to markdown"
   - "website to markdown"
-  - "web page to md"
-  - "markdown converter"
+  - "html to markdown converter"
+  - "webpage to md"
 schemaType: "howto"
 faq:
-  - question: "How do I convert a website to markdown?"
-    answer: "You can convert a website to markdown using a library like Turndown.js or html2text to transform HTML into markdown. For better output quality, use Supermarkdown (a Rust engine available as an npm package). For full web scraping with JavaScript rendering, Reader handles the entire pipeline in one API call."
-  - question: "Why convert HTML to markdown for LLMs?"
-    answer: "Raw HTML wastes 70-90% of tokens on tags, CSS classes, scripts, and navigation. Clean markdown preserves the content structure (headings, lists, tables) while removing everything an LLM does not need. This cuts costs and fits more content into the context window."
   - question: "What is the best HTML to markdown converter?"
-    answer: "Supermarkdown is the fastest and most accurate HTML-to-markdown converter available. It is written in Rust, handles tables with alignment, nested lists, code blocks, and malformed HTML correctly. It is available as a Rust crate, npm package, and CLI tool at supermarkdown.dev."
-  - question: "What is Supermarkdown?"
-    answer: "Supermarkdown is an open-source Rust library that converts HTML to clean markdown. It uses a three-pass O(n) algorithm with pre-computed metadata for speed, and html5ever for browser-grade HTML parsing. It powers Reader's markdown conversion and is available standalone at supermarkdown.dev."
+    answer: "It depends on your language and use case. Supermarkdown is the fastest with native GFM support and browser grade malformed HTML recovery. Turndown.js is the most popular in JavaScript with the largest plugin ecosystem. markdownify is the best option for Python projects."
+  - question: "Does converting to markdown lose information?"
+    answer: "Some HTML features cannot be represented in markdown. Colspan and rowspan in tables, nested tables, forms, embedded media, and CSS styling all have no markdown equivalent. All converters handle these gracefully by flattening or omitting them. The semantic content (text, headings, lists, links, basic tables) is fully preserved."
+  - question: "Why not just use raw HTML with LLMs?"
+    answer: "Raw HTML wastes 67 to 87% of tokens on markup, navigation, scripts, and styling that have nothing to do with the actual content. Clean markdown preserves the semantic structure at a fraction of the token cost, resulting in lower API expenses, faster inference, and better model comprehension."
+  - question: "Can I convert JavaScript rendered pages to markdown?"
+    answer: "Static converters like Turndown and Supermarkdown need pre rendered HTML. They cannot execute JavaScript themselves. For live web pages that load content dynamically, use a tool like Reader that renders JavaScript with a headless browser first and then converts the rendered HTML to markdown."
 ---
 
-Converting a website to markdown sounds simple. Fetch the HTML, strip the tags, done. In practice, it is one of those problems that gets harder the deeper you go.
+Converting a website to clean markdown is one of the most common tasks in AI development. Web pages are built for browsers, full of navigation menus, advertising scripts, cookie banners, and tracking pixels. The actual content represents roughly 20% of the HTML. The other 80% is noise that wastes tokens and degrades LLM performance.
 
-Raw HTML from a modern web page is full of navigation bars, tracking scripts, cookie banners, inline styles, and SVG icons. If you are feeding this into an LLM, you are wasting 70-90% of your tokens on content that adds zero value. Clean markdown preserves the structure (headings, lists, tables, code blocks) without the noise.
+This guide covers six methods for converting web pages to markdown, from quick JavaScript libraries to a purpose built Rust engine, and helps you pick the right one for your use case.
 
-This guide covers four approaches, from simple libraries to production APIs, so you can pick the right one for your use case.
+## Why Markdown Instead of HTML for LLMs
 
-## The Problem with Raw HTML
+The token efficiency difference between HTML and markdown is significant and well documented.
 
-A typical web page contains far more markup than actual content. Here is what a single paragraph looks like in HTML versus markdown:
+A typical 3,000 word article uses roughly 8,000 tokens as HTML but only 2,800 tokens as clean markdown. That is a 67% reduction for identical semantic content. For real world web pages with navigation, ads, and scripts, the reduction reaches 87% because markdown strips everything that is not actual content.
 
-**Raw HTML (45 tokens):**
+Academic research supports this. The TQA Bench study (arXiv 2411.19504) found that HTML requires nearly three times more tokens than lightweight formats like markdown for tabular data serialization. At 64K scale, HTML databases exceed 128K tokens, pushing past the context limits of most models.
 
-```html
-<div class="article-content mt-8 prose prose-lg mx-auto">
-  <p class="text-gray-700 leading-relaxed mb-4">
-    Machine learning models require <strong class="font-bold">clean data</strong>
-    to produce accurate results.
-  </p>
-</div>
-```
+The practical impact is threefold. Lower token count means lower API costs, especially at scale. More content fits within a model's context window, enabling richer retrieval. And LLMs parse markdown more reliably than HTML because the signal to noise ratio is dramatically higher.
 
-**Clean markdown (12 tokens):**
+Beyond token efficiency, markdown preserves semantic structure. Headings map to document hierarchy. Lists stay as lists. Tables remain tabular. Links are preserved. The content is readable by both humans and machines without any rendering engine.
 
-```markdown
-Machine learning models require **clean data** to produce accurate results.
-```
+## The Two Step Problem
 
-That is a 73% reduction on a single paragraph. On a full page with navigation, footers, and scripts, the reduction is typically 80-95%. For an LLM processing hundreds of pages in a [RAG pipeline](/blog/scrape-website-to-markdown), this difference adds up fast.
+Converting a webpage to markdown is actually two separate problems that require different tools.
 
-## Option 1: Turndown.js (JavaScript)
+The first problem is content extraction: identifying and isolating the main content from navigation, headers, footers, sidebars, advertisements, and cookie banners. This is a classification problem. The tool needs to understand which part of the page is the actual article or content and which parts are chrome.
 
-[Turndown.js](https://github.com/mixmark-io/turndown) is the most popular HTML-to-markdown library in JavaScript, with over 11,000 GitHub stars. It converts HTML strings to markdown using a rule-based system.
+The second problem is structural conversion: transforming HTML tags into markdown syntax. An `<h2>` becomes `##`. A `<ul>` becomes a bulleted list. A `<table>` becomes a GFM table. This is a transformation problem that requires correct handling of nesting, indentation, and edge cases.
 
-Install it with npm:
+Different tools excel at each step. Readability.js is excellent at content extraction but does not convert to markdown. Turndown.js is excellent at structural conversion but converts everything you give it, including navigation and ads. The best results come from combining both steps, or using a tool that handles both in a single pass.
 
-```bash
-npm install turndown turndown-plugin-gfm
-```
+## Method 1: Turndown.js
 
-Basic conversion looks like this:
+Turndown.js is the most widely used HTML to markdown converter in the JavaScript ecosystem. It has over 11,000 GitHub stars, more than 3 million weekly npm downloads, and is licensed under MIT. It powers Jina Reader's conversion pipeline and countless web clippers and content management tools.
+
+Turndown works in both Node.js and browser environments. It is plugin extensible, with GFM support (tables, strikethrough, task lists) available through the turndown-plugin-gfm package.
 
 ```javascript
-const TurndownService = require("turndown");
-const { gfm } = require("turndown-plugin-gfm");
+const TurndownService = require('turndown');
+const turndownPluginGfm = require('turndown-plugin-gfm');
 
-const turndown = new TurndownService({
-  headingStyle: "atx",
-  codeBlockStyle: "fenced",
-});
+const turndownService = new TurndownService();
+turndownService.use(turndownPluginGfm.gfm);
 
-// Add GitHub Flavored Markdown support (tables, strikethrough)
-turndown.use(gfm);
-
-const html = `
-  <h1>Getting Started</h1>
-  <p>Install the package with <code>npm install reader</code></p>
-  <ul>
-    <li>Fast conversion</li>
-    <li>GFM tables supported</li>
-  </ul>
-`;
-
-const markdown = turndown.turndown(html);
+const markdown = turndownService.turndown('<h1>Hello</h1><p>World</p>');
 console.log(markdown);
+// # Hello
+//
+// World
 ```
 
-Output:
+Turndown's limitation is that it converts whatever HTML you give it. It does not extract main content or strip boilerplate. If you pass it a full web page, the output includes navigation menus, footer links, cookie banners, and everything else in the DOM. It also does not recover from malformed HTML. If the input has unclosed tags or incorrect nesting, the output may be garbled.
 
-```markdown
-# Getting Started
+For clean, well structured HTML fragments, Turndown produces excellent results. For full web pages, you need a content extraction step before conversion.
 
-Install the package with `npm install reader`
+## Method 2: Python (html2text and markdownify)
 
-- Fast conversion
-- GFM tables supported
-```
+Python offers two popular options for HTML to markdown conversion.
 
-Turndown works well for clean HTML fragments. But it has two limitations that matter for web scraping.
-
-First, it does not extract main content. If you pass an entire web page, you get the navigation, sidebar, footer, and cookie banner converted to markdown along with the article. You need a separate content extraction step.
-
-Second, it does not handle pages rendered by JavaScript. If the page uses React, Next.js, or any client-side framework, the HTML you fetch with a simple HTTP request will be mostly empty `<div>` containers.
-
-## Option 2: html2text (Python)
-
-For Python developers, [html2text](https://pypi.org/project/html2text/) converts HTML to readable markdown. It was originally written by Aaron Swartz.
-
-```bash
-pip install html2text
-```
+**html2text** was originally created by Aaron Swartz. It produces readable plaintext with markdown style formatting. It is lightweight, fast, and good for quick conversions where perfect GFM compliance is not required.
 
 ```python
 import html2text
 
-h = html2text.HTML2Text()
-h.body_width = 0  # Don't wrap lines
-h.ignore_links = False
-h.ignore_images = False
+converter = html2text.HTML2Text()
+converter.body_width = 0  # Disable line wrapping
 
-html = """
-<h2>API Reference</h2>
-<p>Send a <strong>POST</strong> request to the <code>/read</code> endpoint.</p>
-<table>
-  <tr><th>Parameter</th><th>Type</th></tr>
-  <tr><td>url</td><td>string</td></tr>
-  <tr><td>formats</td><td>array</td></tr>
-</table>
-"""
-
-print(h.handle(html))
+html = "<h1>Hello</h1><p>This is a <a href='https://example.com'>link</a></p>"
+markdown = converter.handle(html)
+print(markdown)
 ```
 
-Output:
+html2text has options for ignoring links, images, and tables. It is better suited for "make this readable" than "produce valid GFM."
 
-```markdown
-## API Reference
-
-Send a **POST** request to the `/read` endpoint.
-
-Parameter | Type
----|---
-url | string
-formats | array
-```
-
-html2text is lightweight and handles basic conversions well. Like Turndown, it converts whatever HTML you give it, including navigation and boilerplate. It also does not render JavaScript.
-
-## Option 3: Readability + Turndown (Two-Step)
-
-A common pattern is to use [Readability.js](https://github.com/mozilla/readability) (Mozilla's content extraction library, used in Firefox Reader View) to extract the main content first, then convert it with Turndown.
-
-```javascript
-const { Readability } = require("@mozilla/readability");
-const { JSDOM } = require("jsdom");
-const TurndownService = require("turndown");
-const { gfm } = require("turndown-plugin-gfm");
-
-// Step 1: Fetch the page
-const response = await fetch("https://example.com/blog/post");
-const html = await response.text();
-
-// Step 2: Extract main content with Readability
-const dom = new JSDOM(html, { url: "https://example.com/blog/post" });
-const article = new Readability(dom.window.document).parse();
-
-// Step 3: Convert to markdown
-const turndown = new TurndownService({ headingStyle: "atx" });
-turndown.use(gfm);
-const markdown = turndown.turndown(article.content);
-
-console.log(article.title);
-console.log(markdown);
-```
-
-This approach is better than either tool alone. Readability strips navigation, ads, and sidebars. Turndown then converts the clean HTML to markdown.
-
-But it still has gaps. Readability only works on static HTML. Pages that load content via JavaScript will return incomplete or empty results. You also need to handle fetching, error handling, retries, and rate limiting yourself. And some pages will not have a clear "main content" block, causing Readability to extract the wrong section.
-
-## Option 4: Reader API (One Call)
-
-If you need to convert web pages to markdown reliably, including pages rendered by JavaScript and pages behind anti-bot protection, [Reader](https://docs.reader.dev) handles the full pipeline in a single API call.
-
-Reader renders the page in a headless browser, extracts the main content, and converts it to markdown using [Supermarkdown](/blog/introducing-supermarkdown), a Rust engine built specifically for this conversion.
-
-**Python:**
+**markdownify** offers more control and better handling of complex structures. It is MIT licensed, actively maintained, and handles nested lists and tables more accurately than html2text. Recent releases added definition list support and table header inference.
 
 ```python
-from reader_py import ReaderClient
+from markdownify import markdownify as md
 
-client = ReaderClient(api_key="rdr_your_api_key")
-result = client.read(url="https://example.com/blog/post")
-
-print(result.data.markdown)
+html = "<h1>Hello</h1><ul><li>Item 1<ul><li>Nested</li></ul></li></ul>"
+markdown = md(html)
+print(markdown)
 ```
 
-**JavaScript:**
+Neither library handles JavaScript rendered pages. They work on static HTML strings only. If the page content loads dynamically through JavaScript (which is roughly 80% of the modern web), you need to render the page with a headless browser first and then pass the rendered HTML to the converter.
+
+## Method 3: Pandoc
+
+Pandoc is the universal document converter. It handles dozens of input and output formats, including HTML to GitHub Flavored Markdown via `pandoc -f html -t gfm`.
+
+Pandoc has the best edge case handling of any converter. It correctly processes nested tables, definition lists, footnotes, and complex document structures that trip up other tools. If your HTML has unusual or deeply nested structures, Pandoc is the most likely to produce correct output.
+
+The limitation is that Pandoc is a Haskell binary installed via system package managers, not a library you import into your application. This makes it impractical for serverless environments, browser based tools, or applications that need to bundle everything as a single deployment. It also converts the entire document, including navigation and boilerplate, because it has no concept of content extraction.
+
+Pandoc is best for converting local HTML files or well structured document fragments, not for live web scraping.
+
+## Method 4: Readability.js + Turndown
+
+The two step pattern that solves both the content extraction and structural conversion problems.
+
+Mozilla Readability (the engine behind Firefox Reader View) analyzes an HTML document, identifies the main article content, and strips everything else: navigation, ads, sidebars, footers, and boilerplate. Turndown then converts the cleaned HTML to markdown.
 
 ```javascript
-import { ReaderClient } from "@vakra-dev/reader-js";
+const { JSDOM } = require('jsdom');
+const { Readability } = require('@mozilla/readability');
+const TurndownService = require('turndown');
 
-const reader = new ReaderClient({ apiKey: "rdr_your_api_key" });
-const result = await reader.read({
-  url: "https://example.com/blog/post",
-});
+const dom = new JSDOM(html, { url: pageUrl });
+const article = new Readability(dom.window.document).parse();
 
-console.log(result.data.markdown);
-```
-
-**cURL:**
-
-```bash
-curl -X POST https://api.reader.dev/v1/read \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: rdr_your_api_key" \
-  -d '{"url": "https://example.com/blog/post"}'
-```
-
-The output is clean markdown with headings, lists, tables, and code blocks preserved. No navigation, no ads, no cookie banners.
-
-Reader handles several problems that the library approach does not:
-
-- **JavaScript rendering.** Pages built with React, Vue, or Next.js are fully rendered before extraction.
-- **Anti-bot bypass.** Sites protected by Cloudflare, CAPTCHAs, and other bot detection are handled automatically.
-- **Content extraction.** Main content is extracted and boilerplate is stripped without needing Readability.
-- **Edge cases.** Complex tables, nested lists, code blocks with language detection, and malformed HTML are all handled by the Supermarkdown engine.
-
-## Inside Supermarkdown: The Rust Engine That Powers the Conversion
-
-The markdown conversion in Reader is powered by [Supermarkdown](https://supermarkdown.dev), an open-source Rust library built from scratch for this problem. It is not a port of Turndown or any existing converter. It is a ground-up implementation designed for speed, correctness, and the edge cases that real web pages throw at you.
-
-You can use Supermarkdown standalone, without Reader. It is available as a [Rust crate](https://crates.io/crates/supermarkdown), an [npm package](https://www.npmjs.com/package/@vakra-dev/supermarkdown) with native bindings, and a CLI tool.
-
-### Why Build a New Converter?
-
-Existing converters struggle with real web content. Turndown.js uses regex-based escaping that over-escapes in many cases. html2text produces plain text that loses structural information. Pandoc converts everything including navigation and boilerplate. None of them handle the edge cases well: tables with alignment, code blocks that contain backticks, deeply nested lists, or malformed HTML from the wild web.
-
-Supermarkdown was built to handle all of these correctly and fast.
-
-### How It Works: Three Passes, O(n) Complexity
-
-Most HTML-to-markdown converters are slower than they need to be. The typical approach for nested lists is to walk up the DOM tree for every list item to figure out the indentation level. That makes the algorithm O(n²) for documents with many list items.
-
-Supermarkdown avoids this with a pre-computation pass. It traverses the DOM once, computes all the metadata (list prefixes, indentation levels, skip flags from CSS selectors), and stores it in a hash map. The actual conversion pass then does O(1) lookups instead of tree walks.
-
-The full pipeline is:
-
-1. **Parse** the HTML using html5ever, an HTML5 spec-compliant parser from the Servo project. This handles malformed HTML the same way browsers do.
-2. **Precompute** all node metadata in a single depth-first traversal. List indentation, ordered list counters, CSS selector matches, everything computed once.
-3. **Convert** each node to markdown using modular rules, with O(1) metadata lookups.
-4. **Postprocess** the output in a single pass: collapse extra newlines, escape markdown special characters, trim trailing whitespace.
-
-Three linear passes instead of quadratic traversals. The result is that Supermarkdown processes a typical web page in under 1ms.
-
-### What It Handles That Others Miss
-
-**Table alignment.** Supermarkdown reads the `align` attribute and `text-align` CSS style on table cells and generates proper GFM alignment syntax (`:---`, `:---:`, `---:`).
-
-**Code language detection.** When converting `<pre><code>` blocks, it checks for `language-*`, `lang-*`, `highlight-*`, and `hljs-*` class patterns to produce fenced code blocks with the correct language identifier. It also strips line number gutters that syntax highlighters inject.
-
-**Dynamic fence calculation.** If a code block contains triple backticks, Supermarkdown automatically uses four backtick fences. This prevents broken output that most converters produce.
-
-**Ordered list start values.** HTML supports `<ol start="5">`. Supermarkdown respects this and starts the list at the correct number.
-
-**URL handling.** Spaces and parentheses in URLs are encoded. Relative URLs are resolved against a base URL if provided. Base64 data URIs in images are skipped since they have no meaningful markdown representation.
-
-**Selector-based filtering.** You can pass CSS selectors to exclude or include specific elements. This lets you strip navigation, sidebars, or ad containers before conversion, without needing a separate content extraction library.
-
-### Using Supermarkdown Standalone
-
-**Node.js:**
-
-```javascript
-import { convert } from "@vakra-dev/supermarkdown";
-
-const html = `
-  <h1>Getting Started</h1>
-  <p>Install with <code>npm install reader</code></p>
-  <table>
-    <tr><th>Feature</th><th align="center">Status</th></tr>
-    <tr><td>Tables</td><td align="center">Supported</td></tr>
-    <tr><td>Code blocks</td><td align="center">Supported</td></tr>
-  </table>
-`;
-
-const markdown = convert(html, {
-  headingStyle: "atx",
-  bulletMarker: "-",
-  excludeSelectors: ["nav", "footer", ".ad-banner"],
-});
-
+const turndownService = new TurndownService();
+const markdown = turndownService.turndown(article.content);
 console.log(markdown);
 ```
 
-Output:
+This combination is what Jina Reader uses under the hood. It produces good results for article style content and blog posts. The limitation is that Readability is designed for articles specifically, not for arbitrary page types like product listings, documentation, or dashboards. It also requires two dependencies and is JavaScript only.
 
-```markdown
-# Getting Started
+## Method 5: Supermarkdown (Rust)
 
-Install with `npm install reader`
+Supermarkdown is an HTML to markdown conversion engine built from scratch in Rust, designed specifically for web scraping and LLM pipelines. It is available at [supermarkdown.dev](https://supermarkdown.dev) and open source under the MIT license.
 
-| Feature | Status |
-| --- | :---: |
-| Tables | Supported |
-| Code blocks | Supported |
+### Architecture
+
+Supermarkdown uses html5ever for HTML parsing, the same parser that Firefox uses. This provides browser grade error recovery, meaning malformed HTML (unclosed tags, incorrect nesting, CMS mangled markup) is handled correctly rather than causing crashes or garbled output.
+
+The conversion uses a single pass O(n) DOM traversal. In one pass, it pre computes all metadata: list indices, CSS selector matches, heading levels, and code block nesting depths. A second pass converts the DOM to markdown using O(1) lookups against the pre computed metadata. There is no intermediate representation, no AST, and no multi pass transformation. HTML goes in, markdown comes out.
+
+Rust's ownership model means zero garbage collector pauses and predictable latency. This matters for pipelines processing thousands of pages where consistent throughput is more important than peak speed.
+
+### GFM Support
+
+Supermarkdown produces full GitHub Flavored Markdown:
+
+Tables with alignment detection. It reads the `align` attribute and `text-align` CSS property to set column alignment. The first row automatically becomes the header.
+
+Fenced code blocks with language detection. It reads class patterns including `language-*`, `lang-*`, `highlight-*`, and `hljs-*` to identify the programming language. Line numbers from syntax highlighting are automatically stripped. Dynamic backtick fencing handles code that contains backticks by wrapping in more backticks.
+
+Lists with correct nesting. Deeply nested lists preserve proper indentation. Ordered lists preserve the `start` attribute. Task lists (checkbox items) and definition lists (dt/dd elements) are both supported.
+
+Links and URLs. Configurable inline or reference style. Relative URLs resolve to absolute via the `baseUrl` option. Spaces and parentheses in URLs are percent encoded automatically.
+
+Details/summary elements, strikethrough, autolinks, horizontal rules, and blockquotes (including nested) are all handled.
+
+### Content Filtering
+
+Supermarkdown can extract content during conversion through CSS selector filtering:
+
+```javascript
+import { convert } from '@vakra-dev/supermarkdown';
+
+const markdown = convert(html, {
+  baseUrl: 'https://example.com',
+  excludeSelectors: ['nav', '.sidebar', '.footer', '.cookie-banner', '.ad'],
+  includeSelectors: ['article', 'main', '.content']
+});
+```
+
+The `excludeSelectors` option skips elements matching those CSS selectors. The `includeSelectors` option processes only elements matching those selectors. This enables content extraction and structural conversion in a single pass, eliminating the need for a separate Readability step.
+
+### Usage
+
+**Node.js:**
+```bash
+npm install @vakra-dev/supermarkdown
+```
+```javascript
+import { convert } from '@vakra-dev/supermarkdown';
+
+const markdown = convert('<h1>Hello</h1><p>World</p>');
+// # Hello\n\nWorld
 ```
 
 **Rust:**
-
+```bash
+cargo add supermarkdown
+```
 ```rust
 use supermarkdown::{convert, Options};
 
-let html = "<h1>Hello</h1><p>World</p>";
-let options = Options::default();
-let markdown = convert(html, &options);
+let options = Options {
+    base_url: Some("https://example.com".into()),
+    ..Default::default()
+};
+let markdown = convert(html, Some(options));
 ```
 
 **CLI:**
-
 ```bash
+cargo install supermarkdown-cli
+
 # Convert a file
-supermarkdown page.html > output.md
+supermarkdown input.html
 
 # Pipe from curl
 curl -s https://example.com | supermarkdown
 
-# Exclude elements
-supermarkdown --exclude "nav,footer,.sidebar" page.html
+# With base URL
+supermarkdown --base-url https://example.com input.html
 ```
 
-Supermarkdown ships pre-built native binaries for Linux (x86_64, ARM64), macOS (Intel, Apple Silicon), and Windows. No compilation step needed when you install via npm.
+Supermarkdown also supports async conversion via `convertAsync` for large documents that should not block the event loop.
 
-Visit [supermarkdown.dev](https://supermarkdown.dev) for the full documentation.
+### Edge Case Handling
 
-## When to Use Which Approach
+Real world web HTML is messy. Supermarkdown handles the cases that break other converters:
 
-| Approach | Best for | Handles JS? | Content extraction? | Speed |
-|----------|----------|-------------|-------------------|-------|
-| Turndown.js | Clean HTML fragments you already have | No | No | Fast (JS) |
-| html2text | Quick Python scripts, simple pages | No | No | Fast (Python) |
-| Readability + Turndown | Static pages with clear article content | No | Yes | Fast (JS) |
-| Supermarkdown | High-volume conversion, Rust/Node.js projects | No | Via selectors | Very fast (Rust native) |
-| Reader API | Production use, any URL, JavaScript pages | Yes | Yes | Includes network time |
+Colspan content is placed in the first cell because markdown has no colspan syntax. Nested tables are flattened for the same reason. Forms, iframes, video, and audio elements are skipped because they have no markdown equivalent. Empty elements are removed. These are all graceful degradations rather than crashes.
 
-If you are converting HTML strings you already have, Supermarkdown gives you the best output quality and speed. If you need to fetch live web pages at scale, including pages that use JavaScript or anti-bot protection, Reader handles [the full pipeline](/blog/best-web-scraping-api) and uses Supermarkdown under the hood.
+## Method 6: ReaderLM v2 (Neural Conversion)
 
-## Common Conversion Pitfalls (and How Supermarkdown Handles Them)
+ReaderLM v2 is a fundamentally different approach. Built by Jina AI, it is a 1.5 billion parameter language model (based on Qwen2.5 1.5B Instruct) that converts HTML to markdown using AI rather than rules.
 
-Every HTML-to-markdown converter runs into these problems. Here is how they typically fail and how [Supermarkdown](https://supermarkdown.dev) handles each one.
+It handles up to 512K combined input and output tokens, supports 29 languages, and achieves a ROUGE L score of 0.84 on main content extraction benchmarks. The model is Apache 2.0 licensed and available on HuggingFace. It remains available after Elastic completed its acquisition of Jina AI in October 2025.
 
-**Tables with colspan or rowspan.** Markdown tables require uniform column counts. HTML tables with merged cells have no clean equivalent. Most tools break the layout or dump raw HTML. Supermarkdown places merged cell content in the first cell and preserves alignment attributes, producing a valid GFM table that renders correctly.
+The tradeoff is speed and cost. Neural conversion requires GPU inference (~67 tokens/s in, ~36 tokens/s out on a T4 GPU), making it orders of magnitude slower than rule based converters. But it handles ambiguous content better because it can reason about what constitutes the main content versus boilerplate, even on unusual page layouts.
 
-**Deeply nested lists.** Mixed ordered and unordered lists nested three or more levels deep break most converters. The indentation math is hard to get right. Supermarkdown pre-computes all indentation levels in a single pass, so even 10+ levels of nesting render correctly without performance degradation.
+ReaderLM v2 is best for pages where the content structure is unclear or inconsistent and rule based extractors struggle.
 
-**Code blocks containing backticks.** If your content has code examples that themselves contain triple backticks, the converter needs to use a longer fence. Most tools do not handle this. Supermarkdown dynamically calculates the required fence length and uses four or more backticks when needed.
+## Comparison Table
 
-**Lazy loaded images.** Many sites use `data-src` instead of `src` for images. Converters that only check `src` will miss these. Reader's headless browser renders the page fully before passing the HTML to Supermarkdown, so all lazy loaded content is present in the DOM.
+| Method | Language | GFM Tables | Malformed HTML | Content Extraction | License |
+|--------|----------|-----------|----------------|-------------------|---------|
+| Turndown.js | JavaScript | Yes (plugin) | No | No | MIT |
+| html2text | Python | Basic | No | No | GPL 3.0 |
+| markdownify | Python | Yes | No | No | MIT |
+| Pandoc | Haskell (CLI) | Yes | Yes | No | GPL 2.0 |
+| Readability + Turndown | JavaScript | Yes (plugin) | No | Yes | Apache/MIT |
+| Supermarkdown | Rust (+ npm, CLI) | Yes (native) | Yes (html5ever) | Yes (CSS selectors) | MIT |
+| ReaderLM v2 | Python (GPU) | Yes | Yes | Yes (AI) | Apache 2.0 |
 
-**Malformed HTML.** The real web is full of unclosed tags, mismatched nesting, and invalid attributes. Regex-based converters break on these. Supermarkdown uses html5ever, an HTML5 spec-compliant parser from the Servo project that recovers from malformed markup the same way browsers do.
+## Which Method to Use
+
+For a quick conversion in a JavaScript project, use Turndown.js. It is the most popular, well documented, and plugin extensible.
+
+For a quick conversion in Python, use markdownify. It handles nested lists and tables better than html2text.
+
+For content extraction combined with conversion, use Readability.js plus Turndown in JavaScript, or Supermarkdown with CSS selector filtering in any environment.
+
+For production pipelines that need speed, accuracy, and GFM compliance, use Supermarkdown. The Rust engine with single pass conversion and html5ever parsing handles the edge cases that break other converters.
+
+For maximum edge case handling on local files, use Pandoc.
+
+For ambiguous or inconsistent page structures, use ReaderLM v2.
+
+For the full end to end pipeline (fetch, render JavaScript, extract content, convert to markdown), use Reader. It handles all of these steps in a single API call with Supermarkdown running under the hood.
+
+```bash
+curl -X POST https://api.reader.dev/v1/read \
+  -H "x-api-key: rdr_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
+
+You can also try the free markdown converter at [reader.dev/markdown](https://reader.dev/markdown) to see the output quality instantly without an API key. Reader offers 1,000 free pages per month at [reader.dev](https://reader.dev).
 
 ## Conclusion
 
-Converting websites to markdown is straightforward for simple cases and complex for real-world pages. Turndown.js and html2text work for clean HTML you already have. For better quality and speed, [Supermarkdown](https://supermarkdown.dev) handles the conversion in Rust with correct output for tables, nested lists, code blocks, and malformed HTML. For live web pages that need JavaScript rendering and anti-bot bypass, Reader uses Supermarkdown under the hood and handles the full pipeline in one API call.
+Converting web pages to clean markdown is a solved problem with multiple good options. The right choice depends on your language, your performance requirements, and how messy your HTML sources are.
 
-Check the [Reader documentation](https://docs.reader.dev) to start converting URLs to markdown, or install [Supermarkdown](https://supermarkdown.dev) directly if you already have HTML and just need fast, accurate conversion.
+For most developers building AI applications, the decision comes down to two paths. Use Supermarkdown as a library if you want the converter integrated into your own pipeline. Use Reader if you want the full end to end web scraping and conversion pipeline handled for you. Both are open source, both produce clean GFM output, and both handle the messy reality of web HTML.

@@ -47,7 +47,7 @@ Reader is open-source web scraping for LLMs. Two primitives: `scrape()` for URLs
 **Scrape** turns any URL into clean markdown:
 
 ```javascript
-import { ReaderClient } from "@vakra-dev/reader";
+import { ReaderClient } from "@vakra-dev/reader-js";
 
 const reader = new ReaderClient();
 
@@ -82,7 +82,7 @@ Point it at a site, set your limits, get back clean markdown for every page. The
 
 ## What's Under the Hood
 
-Reader is built on Ulixee Hero with production-grade infrastructure:
+Reader is built on Playwright with production-grade infrastructure:
 
 **Stealth browsing.** TLS fingerprinting, realistic browser behavior, anti-detection measures. The stuff that takes weeks to get right.
 
@@ -103,7 +103,7 @@ Reader is open source because scraping infrastructure shouldn't be a black box. 
 The code is on GitHub. The package is on npm. Install it and start scraping.
 
 ```bash
-npm install @vakra-dev/reader
+npm install @vakra-dev/reader-js
 ```
 
 ## Try It
@@ -114,4 +114,4 @@ I built Reader because I needed it. If you're building AI applications that need
 
 ---
 
-_Questions? Check the [documentation](https://docs.reader.dev) or open an issue on [GitHub](https://github.com/vakra-dev/reader)._
+_Questions? Check the [documentation](https://docs.reader.dev) or open an issue on [GitHub](https://github.com/vakra-dev/reader). If you want to see how Reader compares to other tools, read our [web scraping API comparison](/blog/best-web-scraping-api) or learn how Reader [converts any website to clean markdown](/blog/convert-website-to-markdown)._

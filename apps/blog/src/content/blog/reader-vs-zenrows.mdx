@@ -1,125 +1,161 @@
 ---
-title: "Reader vs ZenRows: Anti-Bot Scraping for AI Pipelines"
-description: "Compare Reader and ZenRows for web scraping. Covers anti-bot bypass, markdown output, browser sessions, proxy networks, and AI pipeline integration."
-date: 2026-07-08
+title: "Reader vs ZenRows: Anti Bot Scraping for AI Pipelines"
+description: "A detailed comparison of Reader and ZenRows for web scraping. Anti bot capabilities, browser automation, open source licensing, and output quality compared."
+date: 2026-07-09
 author: "Nihal Kaul"
 category: "Comparisons"
 keywords:
   - "zenrows alternative"
-  - "reader vs zenrows"
-  - "anti-bot web scraping"
-  - "zenrows comparison"
-  - "web scraping api"
+  - "zenrows vs reader"
+  - "anti bot web scraping"
+  - "web scraping api comparison"
 schemaType: "article"
 faq:
-  - question: "Is Reader a good ZenRows alternative?"
-    answer: "Reader is a strong alternative if your priority is clean markdown output, crawl support, and browser sessions. ZenRows is the better choice if anti-bot bypass on heavily protected sites is your primary concern. Both support markdown output."
-  - question: "Does ZenRows support markdown output?"
-    answer: "Yes. ZenRows supports markdown via the response_type=markdown parameter. It also supports HTML, plaintext, and PDF output. Markdown is not the default format, so you need to request it explicitly on each API call."
-  - question: "What is the difference between Reader and ZenRows for AI use cases?"
-    answer: "Reader was built for AI workflows and returns markdown by default. It includes crawl support and browser sessions. ZenRows started as an anti-bot specialist and added markdown support later. ZenRows has stronger anti-bot bypass but no built-in crawl endpoint."
-  - question: "Does Reader handle Cloudflare protection?"
-    answer: "Yes. Reader uses browser fingerprint generation and tiered proxies to handle Cloudflare and other anti-bot systems. Standard mode handles most sites. Premium mode uses residential proxies for heavily protected pages. For the most difficult sites, ZenRows has deeper anti-bot coverage."
+  - question: "Is ZenRows open source?"
+    answer: "No. ZenRows is fully closed source with no public GitHub repository and no self hosting option."
+  - question: "Which has better anti bot bypass?"
+    answer: "ZenRows is more specialized in anti bot bypass with Adaptive Stealth Mode and dedicated focus on Cloudflare, Akamai, DataDome, and PerimeterX. Reader handles common anti bot scenarios through browser fingerprinting and proxy escalation but is not as deeply specialized as ZenRows."
+  - question: "Can I self host either tool?"
+    answer: "Only Reader. Reader is fully open source under Apache 2.0 and can be deployed on your own infrastructure with no feature gaps. ZenRows has no self hosting option."
+  - question: "Which has better developer experience?"
+    answer: "Reader is simpler to set up with a single API endpoint and clean markdown output by default. ZenRows has more configuration options for anti bot tuning but a steeper learning curve. Both have good documentation and SDK support."
 ---
 
-Reader and ZenRows both scrape web pages and can return markdown, but they come from different starting points. ZenRows started as an anti-bot bypass specialist and expanded into a full scraping platform. Reader was built from the start for AI workflows, with markdown output, crawling, and browser automation as core features.
+ZenRows has built a strong reputation as the anti bot specialist in the web scraping space. Their Adaptive Stealth Mode and focus on bypassing Cloudflare, Akamai, DataDome, and PerimeterX protection systems is their primary selling point. Reader takes a different approach as an open source web infrastructure platform that combines scraping, crawling, and browser automation into a single project.
 
-This comparison helps you decide which matters more for your use case: the deepest anti-bot coverage, or a broader toolkit for AI pipelines.
+This comparison covers anti bot capabilities, browser automation, open source licensing, output quality, and integrations.
 
-## Quick Comparison
+## What ZenRows Does
 
-| Feature | Reader | ZenRows |
-|---------|--------|---------|
-| Default output | Markdown | HTML |
-| Markdown support | Native (default) | Via `response_type=markdown` |
-| Markdown engine | [Supermarkdown](https://supermarkdown.dev) (Rust) | Server-side conversion |
-| Crawl support | Yes (BFS, depth + page limits) | No |
-| Browser sessions | CDP WebSocket (Playwright/Puppeteer) | Scraping Browser (WebSocket) |
-| Anti-bot | Fingerprint generation + tiered proxies | Adaptive Stealth Mode |
-| Proxy network | ISP + residential via Oxylabs | 55M+ residential IPs |
-| AI extraction | JSON Schema + natural language | CSS selectors + autoparse |
-| MCP server | Yes | Yes |
-| Self-hostable | Yes | No |
+ZenRows is a managed web scraping platform built around three products. The Universal Scraper API is their core offering: you send a URL, it handles JavaScript rendering, proxy rotation, and anti bot bypass, and returns the page content. The Scraping Browser provides cloud hosted headless browsers with Playwright and Puppeteer support for sites that require full browser interaction. Residential Proxies give you access to over 55 million IPs across 185+ countries for geo targeted scraping.
 
-## Anti-Bot: Where ZenRows Leads
+ZenRows' standout feature is Adaptive Stealth Mode, which automatically selects the optimal proxy type, fingerprint configuration, and rendering strategy for each request. The system learns which configurations work for specific target sites and adapts dynamically. ZenRows markets a 99.93% success rate, though independent benchmarks show different numbers depending on the target sites tested.
 
-ZenRows' core strength is its Adaptive Stealth Mode. When you send a request, ZenRows automatically escalates from a basic request to JavaScript rendering to premium residential proxies. You only pay for the configuration that succeeds. Failed attempts are not charged.
+Output formats include HTML, Markdown, JSON, plaintext, and screenshots. Autoparse extracts structured JSON from supported sites at no additional cost. CSS Extractor lets you pull specific elements using selectors.
 
-This adaptive approach means ZenRows handles the widest range of [anti-bot systems](/blog/403-error-web-scraping): Cloudflare (including Turnstile challenges), DataDome, Akamai, PerimeterX (HUMAN Security), and Imperva. If your primary use case is scraping heavily protected sites, ZenRows has the deepest coverage.
+ZenRows integrates with LangChain, LlamaIndex, Clay.com (popular for sales lead enrichment), Make, Zapier, n8n, Pipedream, and Selenium IDE. An MCP server is available for AI coding tools.
 
-**Reader's anti-bot** uses browser fingerprint generation with a two-tier proxy system. Standard mode routes through dedicated ISP proxies with browser fingerprints that match real Chrome profiles. Premium mode adds residential proxies for harder sites. This handles the majority of sites but does not have the same breadth of anti-bot vendor coverage as ZenRows.
+The company was founded in 2021 by Aurken Bilbao and Ander Rodriguez Varela, and is headquartered in Spain.
 
-For most AI data collection use cases, where you are scraping documentation, blog content, news articles, or public data, Reader's anti-bot is sufficient. For scraping e-commerce sites, social media, or other heavily protected targets, ZenRows' adaptive system has an edge.
+## What Reader Does
 
-## Markdown Output
+Reader is an open source web infrastructure platform licensed under Apache 2.0. The entire platform is available on GitHub and can be self hosted on your own infrastructure or used through the managed cloud platform at reader.dev.
 
-Both tools can return markdown, but they approach it differently.
+Reader provides three primitives. Read scrapes any URL and returns clean markdown. Crawl extracts content across entire domains with configurable depth and URL pattern filtering. Browse provides full cloud browser sessions with CDP compatibility, so your existing Playwright and Puppeteer scripts work without modification.
 
-**Reader** returns markdown by default. Every API response includes clean markdown powered by [Supermarkdown](/blog/introducing-supermarkdown), a Rust engine that handles complex tables with alignment, code blocks with language detection, nested lists, and malformed HTML.
+The Supermarkdown engine, built in Rust, handles HTML to markdown conversion in under 5 milliseconds per page through a single pass O(n) DOM traversal. Reader offers 1,000 free pages per month on the managed platform.
 
-**ZenRows** returns HTML by default. You request markdown by setting `response_type=markdown` in the API call. The markdown conversion happens server-side, but the engine and its capabilities are not documented.
-
-For AI pipelines where markdown quality matters ([RAG](/blog/scrape-website-to-markdown), context injection, knowledge bases), Reader's Supermarkdown produces more accurate output on pages with complex formatting. For simpler pages, both produce usable markdown.
-
-## Crawling
-
-Reader has crawl built into the API. ZenRows does not have a dedicated crawl endpoint. You can build a crawler on top of their scraping API, but you handle link discovery, URL queuing, and depth tracking yourself.
+### Reader SDK Example
 
 ```python
-# Reader: crawl an entire site
 from reader_py import ReaderClient
 
 client = ReaderClient(api_key="rdr_your_key")
-result = client.read(
-    url="https://docs.example.com",
-    max_depth=3,
-    max_pages=50,
-)
+result = client.read(url="https://example.com")
+print(result.data.markdown)
 ```
 
-With ZenRows, you handle link discovery yourself. You scrape the first page, extract links, then send each link as a separate API call. This means building your own URL queue, deduplication logic, and depth tracking.
+```javascript
+import { ReaderClient } from "@vakra-dev/reader-js";
 
-For use cases like indexing documentation, building knowledge bases, or [scraping entire sites to markdown](/blog/scrape-website-to-markdown), Reader's crawl saves significant engineering work.
+const reader = new ReaderClient({ apiKey: "rdr_your_key" });
+const result = await reader.read({ url: "https://example.com" });
+console.log(result.data.markdown);
+```
 
-## Browser Sessions
+## Anti Bot Capabilities
 
-Both tools offer cloud browser sessions, but with different models.
+This is the core comparison, since anti bot bypass is ZenRows' primary positioning.
 
-**Reader** provides direct CDP WebSocket access. You create a session and connect with Playwright or Puppeteer. Your existing automation code works without changes. The browser runs with stealth configuration and proxies already set up.
+ZenRows specializes in bypassing the most aggressive anti bot systems on the web. Their documentation and marketing specifically call out Cloudflare, Akamai, DataDome, PerimeterX, and AWS WAF. Adaptive Stealth Mode is their flagship differentiator: it automatically adjusts proxy type, browser fingerprint, and rendering configuration per request, learning which settings work for specific domains.
 
-**ZenRows** offers a Scraping Browser accessible via WebSocket at `wss://browser.zenrows.com`. It supports Playwright and Puppeteer connections with auto-rotating residential proxies billed by time and bandwidth.
+ZenRows also offers dedicated anti bot content on their blog covering bypass techniques for each major protection system. This depth of focus on anti bot is reflected in their product: the entire platform is engineered around getting past blocks.
 
-Both approaches let you automate complex interactions. ZenRows' Scraping Browser has the advantage of automatic residential proxy rotation per request, which is valuable for sites that track IP patterns.
+In the Scrapeway independent benchmark from June 2026, which tested 8 scraping APIs across 12 target websites, ZenRows scored 31% overall success, ranking 7th out of 8 APIs tested, with a 13.3 second average response time. It is important to note that benchmark results vary significantly by target site and by testing methodology. ZenRows may perform considerably better on the specific sites you care about. The 99.93% success rate ZenRows markets is a self reported figure and likely measured under different conditions than the independent benchmark.
 
-## API Design
+Reader includes anti bot capabilities through its browser sessions: TLS fingerprinting to match real Chrome browser signatures, navigator spoofing to prevent headless detection, WebRTC masking, and tiered proxy escalation that automatically moves from host IP to datacenter proxy to residential proxy based on response signals. Reader does not yet have independent benchmark data published, and we are transparent about that.
 
-**Reader** uses a single unified endpoint (`POST /v1/read`). The behavior changes based on parameters: a single URL gives you a scrape, an array gives you a batch, adding `maxDepth` gives you a crawl, adding `extract` gives you structured data.
+If your primary challenge is scraping heavily protected sites where anti bot bypass is the bottleneck, ZenRows is more specialized for that specific problem. Reader's anti bot approach is broader: it provides the building blocks (stealthed browsers, proxy escalation, fingerprinting) and gives you full control through CDP, rather than offering an opaque system that handles everything automatically.
 
-**ZenRows** uses a single endpoint (`GET https://api.zenrows.com/v1/`) with query parameters that control behavior: `js_render`, `premium_proxy`, `css_extractor`, `response_type`, and others.
+## Browser Automation
 
-Both are straightforward. Reader's approach requires POST requests with JSON bodies. ZenRows' approach uses GET requests with query parameters, which is simpler for quick testing in a browser or curl.
+Both platforms offer browser automation, but they approach it differently.
 
-## When to Use Reader
+ZenRows' Scraping Browser is a cloud hosted headless browser that supports Playwright and Puppeteer connections. It is primarily positioned as an anti bot tool: when the Universal Scraper API cannot get through, the Scraping Browser provides a full browser environment that is harder for anti bot systems to detect. The Scraping Browser is a separate product from the Universal Scraper API, accessed through different endpoints.
 
-Reader is the better choice when:
+Reader's Browse primitive provides full cloud browser sessions with CDP compatibility as a core part of the platform. You create a session through the API, get a CDP endpoint, and connect any CDP compatible tool. The key difference is in positioning and architecture: Reader's browser sessions are a general purpose automation primitive designed for any task that requires browser interaction, not just anti bot bypass. You can log into authenticated portals, navigate multi page workflows, fill forms, download files, and maintain state across many interactions.
 
-- **You need markdown for AI workflows.** Native markdown output with [Supermarkdown](https://supermarkdown.dev) handles complex formatting correctly.
-- **You need to crawl websites.** Built-in BFS crawl with depth and page limits.
-- **You need browser sessions with existing code.** Direct CDP access for Playwright and Puppeteer.
-- **You want to self-host.** Run the engine on your own infrastructure.
+```javascript
+import { ReaderClient } from "@vakra-dev/reader-js";
+import { chromium } from "playwright";
 
-## When to Use ZenRows
+const reader = new ReaderClient({ apiKey: "rdr_your_key" });
+const session = await reader.sessions.create({ maxDurationMs: 300000 });
 
-ZenRows is the better choice when:
+const browser = await chromium.connectOverCDP(session.wsEndpoint);
+const page = browser.contexts()[0].pages()[0];
+await page.goto("https://example.com/dashboard");
+```
 
-- **Anti-bot bypass is your top priority.** Adaptive Stealth Mode handles Cloudflare, DataDome, Akamai, PerimeterX, and more.
-- **You need a large residential proxy network.** 55 million IPs across 190+ countries with 99.9% uptime.
-- **You are scraping heavily protected sites at scale.** The adaptive escalation means you only pay for the bypass level that works.
+```python
+from reader_py import ReaderClient
+from playwright.sync_api import sync_playwright
+
+client = ReaderClient(api_key="rdr_your_key")
+session = client.sessions.create(max_duration_ms=300000)
+
+with sync_playwright() as p:
+    browser = p.chromium.connect_over_cdp(session.ws_endpoint)
+    page = browser.contexts[0].pages[0]
+    page.goto("https://example.com/dashboard")
+```
+
+Both platforms support Playwright and Puppeteer connections. The practical difference is whether you think of browser sessions as an anti bot escalation path (ZenRows' approach) or as a foundational primitive for web automation (Reader's approach).
+
+## Open Source and Licensing
+
+ZenRows is fully closed source. There is no public GitHub repository for the product and no self hosting option. All usage goes through ZenRows' managed platform.
+
+Reader is open source under the Apache 2.0 license. The complete platform is on GitHub: scraping engine, crawling infrastructure, browser pool management, Supermarkdown conversion engine, and cloud platform code. You can clone, deploy, modify, and use it commercially without any licensing restrictions. There is no copyleft requirement and no obligation to share modifications.
+
+For teams that need to run scraping infrastructure on their own servers, operate in environments where data cannot leave their network, or want to audit and modify the scraping stack they depend on, this is a fundamental difference.
+
+## Output Quality
+
+ZenRows supports multiple output formats: HTML, Markdown, JSON, plaintext, and screenshots. The Autoparse feature extracts structured JSON from supported sites. CSS Extractor pulls specific elements using selectors. The Markdown output is clean and suitable for LLM consumption.
+
+Reader returns clean markdown by default through Supermarkdown, the Rust engine that strips navigation, ads, scripts, footers, and boilerplate in a single pass. The output preserves document structure (headings, paragraphs, lists, links, tables) while removing everything that is not actual content.
+
+Both platforms produce good quality output. Reader's advantage is that markdown is the default format, built into the core engine, and optimized for speed. ZenRows' advantage is the wider range of output format options in a single API.
+
+## Integrations
+
+ZenRows has strong integrations with the AI and sales tooling ecosystem. LangChain and LlamaIndex integrations for RAG pipelines. Clay.com integration for sales lead enrichment workflows. Make, Zapier, n8n, and Pipedream for no code automation. Selenium IDE support. MCP server for AI coding tools.
+
+The Clay.com integration is notable because it connects web scraping directly to sales workflows. If your team uses Clay for lead enrichment, ZenRows plugs in directly.
+
+Reader offers SDKs for JavaScript and Python, a REST API, and an MCP server. LangChain and LlamaIndex work through Reader's SDK. The integration surface is growing but does not yet include the sales tool integrations that ZenRows offers.
+
+## When to Pick Each Tool
+
+### Choose ZenRows if:
+
+You scrape heavily protected sites and need the most specialized anti bot bypass available. You already use Clay.com for lead enrichment and want direct integration. You need residential proxies with geo targeting across 185+ countries. You want Adaptive Stealth Mode to handle proxy and fingerprint configuration automatically.
+
+### Choose Reader if:
+
+You need an open source solution you can self host under Apache 2.0 with no licensing restrictions. You need browser automation as a core primitive rather than just an anti bot escalation path. You are building for LLM pipelines and want markdown first output from a purpose built Rust engine. You want Apache 2.0 licensing for commercial use without copyleft concerns. You want full control over your scraping infrastructure through an open, auditable codebase.
+
+## Getting Started with Reader
+
+Reader offers 1,000 free pages per month at reader.dev with no credit card required. Try the instant markdown converter at [reader.dev/markdown](https://reader.dev/markdown) to see the output quality.
+
+Full documentation is at [docs.reader.dev](https://docs.reader.dev). Source code is on [GitHub](https://github.com/vakra-dev/reader).
 
 ## Conclusion
 
-Reader and ZenRows serve different primary needs. Reader gives you the broadest AI workflow toolkit: markdown output, crawling, browser sessions, and extraction in one API. ZenRows gives you the deepest anti-bot bypass with adaptive stealth and a massive proxy network.
+ZenRows and Reader occupy different positions in the web scraping space. ZenRows is the anti bot specialist with deep expertise in bypassing the most aggressive protection systems. Reader is an open source web infrastructure platform that combines scraping, crawling, and browser automation under one roof.
 
-For most AI developers collecting web data from typical sites, Reader's anti-bot is sufficient and the broader feature set is more valuable. For teams specifically targeting heavily protected sites, ZenRows' anti-bot depth is hard to match.
+If your primary challenge is getting past Cloudflare, Akamai, or DataDome on heavily protected sites, ZenRows is purpose built for that problem. If you need an open source platform with Apache 2.0 licensing, persistent browser sessions for authenticated workflows, and markdown native output for LLM pipelines, Reader is the stronger fit.
 
-Check the [Reader documentation](https://docs.reader.dev) or [ZenRows documentation](https://docs.zenrows.com) to get started.
+Test both with your target URLs. Anti bot performance varies by site, and the tool that works best on your specific targets is the right choice regardless of benchmarks or marketing claims.

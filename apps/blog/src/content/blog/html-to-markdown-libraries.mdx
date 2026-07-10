@@ -1,189 +1,234 @@
 ---
-title: "Best HTML-to-Markdown Libraries Compared (2026)"
-description: "Compare the top HTML-to-markdown conversion libraries. Covers Supermarkdown, Turndown.js, html2text, Pandoc, htmd, and rehype-remark with benchmarks."
-date: 2026-07-08
+title: "Best HTML to Markdown Libraries Compared (2026)"
+description: "Compare the best HTML to markdown libraries across JavaScript, Python, Rust, and Go. Performance, GFM support, malformed HTML handling, and edge cases."
+date: 2026-07-09
 author: "Nihal Kaul"
 category: "Tools"
 keywords:
   - "html to markdown"
   - "html to markdown converter"
-  - "turndown js"
   - "html to md"
-  - "markdown converter"
+  - "best markdown converter"
 schemaType: "article"
 faq:
-  - question: "What is the best HTML to markdown converter?"
-    answer: "For speed and accuracy, Supermarkdown (Rust with Node.js bindings) is the fastest option. For JavaScript projects, Turndown.js is the most popular with 11,000+ GitHub stars. For Python, html2text works for simple conversions. The best choice depends on your language and performance needs."
-  - question: "How do I convert HTML to markdown in JavaScript?"
-    answer: "Use Turndown.js (npm install turndown) for a pure JavaScript solution, or @vakra-dev/supermarkdown for a faster Rust-based option with native Node.js bindings. Both accept HTML strings and return clean markdown."
-  - question: "How do I convert HTML to markdown in Python?"
-    answer: "Use html2text (pip install html2text) for basic conversions. For more control, use Pandoc as a subprocess with 'pandoc -f html -t gfm'. For web scraping pipelines, Reader's Python SDK returns clean markdown from any URL without manual conversion."
-  - question: "Is there a fast HTML to markdown converter?"
-    answer: "Supermarkdown is the fastest available option. Built in Rust, it converts a typical 10KB web page in under 1ms. This is roughly 10-50x faster than JavaScript alternatives like Turndown.js, which matters for high-volume pipelines processing thousands of pages."
+  - question: "Which HTML to markdown library is the fastest?"
+    answer: "Supermarkdown and html-to-markdown-rs are both Rust based and significantly faster than JavaScript or Python alternatives. The single pass architecture and lack of garbage collector overhead make Rust converters especially effective for high volume pipelines. For JavaScript specifically, node-html-markdown's streaming approach is faster than Turndown on large documents."
+  - question: "Which library handles malformed HTML best?"
+    answer: "Supermarkdown, html-to-markdown-rs, and Pandoc all use parsers with error recovery. Supermarkdown and html-to-markdown-rs use html5ever (the Firefox HTML parser), which implements the WHATWG specification's error recovery algorithm. Turndown, markdownify, and html2text assume well formed HTML and may produce incorrect output on malformed input."
+  - question: "Can any of these extract main content from a web page?"
+    answer: "Supermarkdown supports CSS selector filtering (excludeSelectors and includeSelectors) during conversion, which enables content extraction in the same pass. ReaderLM v2 handles content extraction via AI. For other libraries, pair Mozilla Readability.js with a converter for the two step approach, or use Reader which handles both steps automatically."
+  - question: "Which library should I use for a Python project?"
+    answer: "markdownify is the best Python option. It is MIT licensed, actively maintained with frequent releases, handles nested lists and tables accurately, and has a Go port available. html2text is lighter and faster but weaker on complex nested structures and strict GFM compliance."
 ---
 
-Converting HTML to markdown is a common task in web scraping, content migration, and AI pipelines. The right library depends on your language, performance requirements, and how much edge case handling you need.
+HTML to markdown conversion sounds simple until you hit nested tables, malformed HTML, code blocks containing backticks, or content mangled by a dozen layers of CMS templating. The right library depends on your language, your performance requirements, and how messy your HTML sources are.
 
-This guide compares six libraries and one common pattern, with honest assessments of what each handles well and where it breaks down.
+This guide compares the most actively used libraries across JavaScript, Python, Rust, and Go, with assessments of what each handles well and where each breaks.
 
-## Quick Comparison
+## What Makes a Good Converter
 
-| Library | Language | Speed | GFM Tables | Nested Lists | Code Language Detection | License |
-|---------|----------|-------|-----------|-------------|------------------------|---------|
-| [Supermarkdown](https://supermarkdown.dev) | Rust (+ Node.js bindings) | Fastest | Yes (with alignment) | Pre-computed O(1) | Yes (8+ patterns) | MIT |
-| Turndown.js | JavaScript | Fast | Via plugin | Standard traversal | No | MIT |
-| html2text | Python | Fast | Basic | Basic | No | GPL-3.0 |
-| Pandoc | Haskell | Moderate | Yes | Yes | Yes | GPL-2.0 |
-| htmd | Rust | Fast | Yes | Standard | No | Apache-2.0 |
-| rehype-remark | JavaScript | Moderate | Partial | Partial | No | MIT |
+Six criteria separate good converters from adequate ones.
 
-## Supermarkdown
+**GFM support.** GitHub Flavored Markdown is the de facto standard for developer tooling. Tables with alignment, fenced code blocks with language identifiers, task lists, and strikethrough are all expected in modern markdown output.
 
-[Supermarkdown](https://supermarkdown.dev) is a Rust library built for high-volume HTML-to-markdown conversion. It powers the markdown output in [Reader](https://reader.dev) and is available as a standalone Rust crate, npm package, and CLI tool.
+**Malformed HTML handling.** Real world web HTML is messy. CMS systems generate unclosed tags, incorrectly nested elements, and invalid attributes. A converter that crashes or produces garbled output on bad HTML is unusable for web scraping.
 
-**What makes it different:** Supermarkdown uses a three-pass O(n) algorithm. The first pass parses HTML with html5ever (an HTML5 spec-compliant parser from the Servo project). The second pass pre-computes all node metadata (list indentation, prefixes, selector matches) in a single traversal. The third pass converts each node using O(1) lookups instead of repeated tree walks.
+**Performance.** For single documents, every converter is fast enough. For pipelines processing thousands or millions of pages, conversion speed directly affects throughput. A 10x difference in speed means the difference between processing a million pages in 83 minutes versus 14 hours.
 
-```javascript
-import { convert } from "@vakra-dev/supermarkdown";
+**Content extraction.** Some converters can identify and extract the main content from a page, skipping navigation, ads, and boilerplate. Others convert everything in the DOM, including all the noise.
 
-const markdown = convert(html, {
-  headingStyle: "atx",
-  excludeSelectors: ["nav", "footer", ".cookie-banner"],
-  baseUrl: "https://example.com",
-});
-```
+**Extensibility.** Custom rules, plugins, and configuration options let you adapt the converter to specific HTML patterns in your data.
 
-**Handles well:** Tables with alignment attributes (`align` and `text-align` CSS), code blocks with language detection (checks `language-*`, `lang-*`, `highlight-*`, `hljs-*` class patterns), dynamic fence calculation when code contains backticks, ordered list start values, URL encoding, and malformed HTML.
+**Active maintenance.** Libraries that have not been updated in years may not handle modern HTML patterns or newer GFM features.
 
-**Limitations:** Version 0.0.6, not yet 1.0. No custom rules API (planned). WASM build not yet available.
+## Turndown.js (JavaScript)
 
-**Install:** `npm install @vakra-dev/supermarkdown` (Node.js) or `cargo add supermarkdown` (Rust). Pre-built binaries for Linux, macOS, and Windows. No compilation needed.
+Turndown.js is the most widely used HTML to markdown converter in any language. It has over 11,000 GitHub stars, more than 3 million weekly npm downloads, and is licensed under MIT. It powers Jina Reader's conversion pipeline and is used by countless web clippers, content management systems, and developer tools.
 
-## Turndown.js
+Turndown works in both Node.js and browser environments. It converts HTML elements to markdown through a rule based system where each HTML element type has a corresponding conversion rule. The architecture is plugin extensible: you define custom rules for elements that need special handling.
 
-[Turndown.js](https://github.com/mixmark-io/turndown) is the most widely used HTML-to-markdown library in JavaScript with over 11,300 GitHub stars. It works in both Node.js and the browser.
-
-Turndown uses a rule-based system where each HTML element is handled by a matching rule. You can add custom rules, keep specific elements as HTML, or remove elements entirely.
+GFM support is available through the `turndown-plugin-gfm` package, which adds tables, strikethrough, and task lists. Without the plugin, Turndown produces standard CommonMark.
 
 ```javascript
-const TurndownService = require("turndown");
-const { gfm } = require("turndown-plugin-gfm");
+const TurndownService = require('turndown');
+const { gfm } = require('turndown-plugin-gfm');
 
-const turndown = new TurndownService({ headingStyle: "atx" });
-turndown.use(gfm);
+const turndownService = new TurndownService();
+turndownService.use(gfm);
 
-const markdown = turndown.turndown(html);
+const markdown = turndownService.turndown(html);
 ```
 
-**Handles well:** Basic HTML conversion, custom rule extensions, plugin architecture (GFM tables via `turndown-plugin-gfm`).
+**Strengths:** Largest ecosystem, excellent documentation, plugin extensible, works in browser and Node.js.
 
-**Limitations:** No built-in table support (requires a separate plugin). Escaping can be aggressive due to its regex-based approach, sometimes over-escaping content. No language detection for code blocks. JavaScript performance limits throughput on large documents.
+**Limitations:** No malformed HTML recovery (assumes valid HTML input). No content extraction (converts everything in the DOM). Performance is adequate for individual documents but becomes a bottleneck at scale due to JavaScript's single threaded execution model.
 
-**Install:** `npm install turndown` + `npm install turndown-plugin-gfm` for table support.
+## markdownify (Python)
+
+markdownify is the most actively maintained Python HTML to markdown library. It is MIT licensed with frequent releases that add features and fix edge cases. Recent versions include definition list support, table header inference via the `table_infer_header` option, and improved heading blank line handling.
+
+markdownify handles nested lists more accurately than html2text and produces cleaner table output. It also has a Go port (go-markdownify) for teams that work across both languages.
+
+```python
+from markdownify import markdownify as md
+
+html = """
+<h1>Title</h1>
+<p>A paragraph with <strong>bold</strong> and <em>italic</em>.</p>
+<ul>
+  <li>Item 1
+    <ul><li>Nested item</li></ul>
+  </li>
+  <li>Item 2</li>
+</ul>
+"""
+
+markdown = md(html)
+```
+
+**Strengths:** Best Python option for accuracy, actively maintained, good nested list and table handling, Go port available.
+
+**Limitations:** No malformed HTML recovery, no content extraction, no JavaScript rendering. Converts whatever HTML string you pass in.
 
 ## html2text (Python)
 
-[html2text](https://pypi.org/project/html2text/) converts HTML to readable plain text that is also valid markdown. Originally written by Aaron Swartz. Version 2025.4.15.
+html2text was originally created by Aaron Swartz. It produces readable plaintext with markdown style formatting. It is lighter and faster than markdownify, with options to ignore links, images, and tables.
 
 ```python
 import html2text
 
-h = html2text.HTML2Text()
-h.body_width = 0  # Don't wrap lines
-print(h.handle(html))
+converter = html2text.HTML2Text()
+converter.body_width = 0
+converter.ignore_links = False
+converter.ignore_images = True
+
+markdown = converter.handle(html)
 ```
 
-**Handles well:** Simple, clean conversions. Command-line usage. Lightweight with no external dependencies.
+**Strengths:** Lightweight, fast, good for "make this readable" use cases. Simple API.
 
-**Limitations:** GPL-3.0 license (copyleft, restrictive for commercial use). Limited table handling. No code block language detection. Output is plain text first, markdown second.
+**Limitations:** Weaker on complex nested structures compared to markdownify. Table handling is basic. Better suited for plaintext extraction than strict GFM compliance.
 
-**Install:** `pip install html2text`
+## Pandoc (Haskell)
 
-## Pandoc
+Pandoc is the universal document converter, handling dozens of input and output formats. For HTML to markdown specifically, `pandoc -f html -t gfm` produces the most edge case correct output of any converter. It handles nested tables, definition lists, footnotes, and deeply nested structures that break every other tool.
 
-[Pandoc](https://pandoc.org) is a universal document converter with over 45,000 GitHub stars. HTML-to-markdown is one of many conversion paths it supports. Version 3.9.0.
+**Strengths:** Best edge case handling in the ecosystem. Handles the widest range of HTML patterns. Mature and thoroughly tested.
 
-```bash
-# Basic conversion
-pandoc -f html -t gfm input.html -o output.md
+**Limitations:** System binary, not a library you import. Not practical for serverless, browser, or embedded environments. Converts the entire document including navigation and boilerplate because it has no concept of content extraction.
 
-# From a URL
-curl -s https://example.com | pandoc -f html -t gfm
+## Supermarkdown (Rust)
 
-# CommonMark output
-pandoc -f html -t commonmark input.html -o output.md
+Supermarkdown is built specifically for web scraping and LLM pipelines. It uses html5ever (the same parser Firefox uses) for browser grade malformed HTML recovery and performs a single pass O(n) DOM traversal with pre computed metadata for O(1) lookups during conversion.
+
+Full GFM support is native, not via plugins: tables with alignment detection, fenced code blocks with language detection (reads `language-*`, `lang-*`, `highlight-*`, `hljs-*` class patterns), task lists, strikethrough, definition lists, and details/summary elements. Dynamic backtick fencing handles code that contains backticks. Automatic line number stripping removes syntax highlighting artifacts.
+
+A standout feature is CSS selector filtering. The `excludeSelectors` and `includeSelectors` options enable content extraction during the same conversion pass, eliminating the need for a separate Readability step.
+
+```javascript
+import { convert } from '@vakra-dev/supermarkdown';
+
+const markdown = convert(html, {
+  baseUrl: 'https://example.com',
+  excludeSelectors: ['nav', '.sidebar', '.footer', '.ad'],
+  codeBlockStyle: 'fenced'
+});
 ```
-
-Pandoc supports multiple markdown variants: `markdown` (Pandoc extended), `gfm` (GitHub Flavored), `commonmark`, and `markdown_strict`.
-
-**Handles well:** Multiple output formats, excellent standards compliance, handles complex document structures.
-
-**Limitations:** Heavyweight dependency (Haskell binary, 100MB+). No content extraction, so it converts everything including navigation and boilerplate. GPL-2.0 license. Requires subprocess spawning from other languages.
-
-**Install:** [pandoc.org/installing.html](https://pandoc.org/installing.html)
-
-## htmd (Rust)
-
-[htmd](https://github.com/letmutex/htmd) is a Rust HTML-to-markdown library inspired by Turndown.js. It has 447 GitHub stars and passes all Turndown.js test cases. Version 0.5.4.
 
 ```rust
-use htmd::HtmlToMarkdown;
+use supermarkdown::{convert, Options};
 
-let converter = HtmlToMarkdown::builder().build();
-let markdown = converter.convert(html).unwrap();
+let options = Options {
+    base_url: Some("https://example.com".into()),
+    ..Default::default()
+};
+let markdown = convert(html, Some(options));
 ```
 
-**Handles well:** Turndown-compatible API, built-in table support, faithful mode that preserves unsupported HTML tags, thread-safe. Benchmarks show 16ms for a 1.37MB Wikipedia page on Apple M4.
+Available as a Rust crate (`supermarkdown` on crates.io), npm package (`@vakra-dev/supermarkdown` via napi-rs with prebuilt binaries), and CLI tool. MIT license. Used inside Reader for all HTML to markdown conversion.
 
-**Limitations:** Rust only, no Node.js or WASM bindings. Smaller community (447 stars). Custom tag handlers that need state require special thread-safe mechanisms.
+**Strengths:** Browser grade malformed HTML recovery via html5ever, single pass performance, native GFM, CSS selector content filtering, available in Rust and Node.js.
 
-**Install:** `cargo add htmd`
+**Limitations:** Newer project (v0.0.6) with a smaller community than Turndown.
 
-## rehype-remark (JavaScript)
+## html-to-markdown (Go)
 
-[rehype-remark](https://github.com/rehypejs/rehype-remark) is part of the unified.js ecosystem. It converts HTML syntax trees (hast) to markdown syntax trees (mdast), which are then serialized to markdown strings.
+JohannesKaufmann's html-to-markdown v2 is the standard Go library for HTML to markdown conversion. It uses a plugin based architecture with commonmark, base, and table plugins. CLI binaries are available via GoReleaser.
 
-```javascript
-import { unified } from "unified";
-import rehypeParse from "rehype-parse";
-import rehypeRemark from "rehype-remark";
-import remarkStringify from "remark-stringify";
+```go
+import "github.com/JohannesKaufmann/html-to-markdown/v2"
 
-const result = await unified()
-  .use(rehypeParse)
-  .use(rehypeRemark)
-  .use(remarkStringify)
-  .process(html);
-
-console.log(String(result));
+markdown, err := htmltomarkdown.ConvertString(html)
 ```
 
-**Handles well:** Composable pipeline architecture, custom handlers for specific elements, works with the broader unified/rehype/remark plugin ecosystem.
+**Strengths:** Well designed plugin architecture, actively maintained, CLI available, good for Go pipelines.
 
-**Limitations:** Requires three packages for a basic conversion. Some HTML elements lack markdown equivalents and are dropped. Much lower adoption than other options (~200 dependents on npm). Requires understanding the unified AST ecosystem.
+**Limitations:** Go only (no bindings for other languages). Community smaller than Turndown.
 
-**Install:** `npm install unified rehype-parse rehype-remark remark-stringify`
+## html-to-markdown-rs (Rust)
 
-## Common Pattern: Readability + Turndown
+The html-to-markdown-rs crate (v3.5.7) is an established Rust option with over 477,000 all time crate downloads and bindings for 16 languages. It uses a three tier dispatch system: byte scanner for simple HTML, DOM walker for structured content, and html5ever repair for malformed input.
 
-A common approach for web scraping is to use [Readability.js](https://github.com/mozilla/readability) (Mozilla's content extraction library, ~11,000 GitHub stars) to strip boilerplate first, then Turndown to convert the clean HTML to markdown.
+It supports CommonMark and Djot output formats and includes metadata extraction. The polyglot bindings make it accessible from Python, JavaScript, Ruby, Go, and many other languages.
 
-```javascript
-const { Readability } = require("@mozilla/readability");
-const { JSDOM } = require("jsdom");
-const TurndownService = require("turndown");
+**Strengths:** Most mature Rust option by download count, 16 language bindings, three tier dispatch for optimal performance, metadata extraction.
 
-const dom = new JSDOM(html, { url: "https://example.com" });
-const article = new Readability(dom.window.document).parse();
-const markdown = new TurndownService().turndown(article.content);
-```
+**Limitations:** Does not produce GFM specifically (CommonMark and Djot). No CSS selector content filtering.
 
-This two-step approach gives you cleaner output than Turndown alone because navigation, ads, and sidebars are removed before conversion. But it adds complexity (two libraries, jsdom dependency) and does not handle JavaScript rendering or anti-bot bypass.
+## node-html-markdown (JavaScript)
 
-For a single-step solution that handles rendering, extraction, and conversion, [Reader's API](/blog/best-web-scraping-api) does all three in one call using Supermarkdown under the hood.
+node-html-markdown takes a streaming tokenizer approach rather than DOM based conversion. It has roughly 333,000 weekly npm downloads and is faster than Turndown on large documents because it processes HTML as a stream rather than building a full DOM tree first.
+
+**Strengths:** Faster than Turndown on large documents, streaming architecture, good for high volume processing in Node.js.
+
+**Limitations:** Fewer custom rules and plugins than Turndown. Smaller community.
+
+## ReaderLM v2 (Neural)
+
+ReaderLM v2 is a fundamentally different approach. Built by Jina AI, it is a 1.5 billion parameter language model (based on Qwen2.5 1.5B Instruct) that converts HTML to markdown using AI rather than rules.
+
+It handles up to 512K combined input and output tokens, supports 29 languages, and achieves a ROUGE L score of 0.84 on main content extraction. The model is Apache 2.0 licensed on HuggingFace and remains available after Elastic completed its acquisition of Jina AI in October 2025.
+
+**Strengths:** Handles ambiguous and inconsistent content better than any rule based converter. Built in content extraction. Multilingual.
+
+**Limitations:** Requires GPU inference (~67 tokens/s in, ~36 tokens/s out on a T4). Orders of magnitude slower than rule based converters. Not practical for high volume pipelines.
+
+## Comparison Table
+
+| Library | Language | License | GFM Tables | Malformed HTML | Content Extraction | Actively Maintained |
+|---------|----------|---------|-----------|----------------|-------------------|-------------------|
+| Turndown.js | JavaScript | MIT | Yes (plugin) | No | No | Stable (low frequency) |
+| markdownify | Python | MIT | Yes | No | No | Yes (frequent releases) |
+| html2text | Python | GPL 3.0 | Basic | No | No | Low frequency |
+| Pandoc | Haskell (CLI) | GPL 2.0 | Yes | Yes | No | Yes |
+| Supermarkdown | Rust + npm + CLI | MIT | Yes (native) | Yes (html5ever) | Yes (CSS selectors) | Yes |
+| html-to-markdown | Go | MIT | Yes (plugin) | Partial | No | Yes |
+| html-to-markdown-rs | Rust + 16 langs | MIT | CommonMark | Yes (html5ever) | No | Yes |
+| node-html-markdown | JavaScript | MIT | Yes | No | No | Yes |
+| ReaderLM v2 | Python (GPU) | Apache 2.0 | Yes | Yes | Yes (AI) | Yes |
+
+## Which Library to Use
+
+**JavaScript project, need customization:** Turndown.js. Largest ecosystem, most plugins, works in browser and Node.js.
+
+**JavaScript project, need speed on large documents:** node-html-markdown. Streaming tokenizer is faster than Turndown's DOM approach.
+
+**Python project:** markdownify. Best balance of accuracy, features, and active maintenance.
+
+**Go project:** html-to-markdown. Well designed plugin architecture, actively maintained.
+
+**Rust project or need maximum performance:** Supermarkdown. Single pass conversion, html5ever parsing, native GFM, CSS selector filtering.
+
+**Need polyglot bindings:** html-to-markdown-rs. Bindings for 16 languages from a single Rust core.
+
+**Need to handle any document format:** Pandoc. Nothing else matches its breadth.
+
+**Need AI powered conversion for ambiguous content:** ReaderLM v2. Fundamentally different approach that handles content extraction and conversion in one model call.
+
+**Need end to end web scraping plus conversion:** Reader. Uses Supermarkdown under the hood and handles fetching, JavaScript rendering, anti bot bypass, and content extraction in a single API call. 1,000 free pages per month at [reader.dev](https://reader.dev).
 
 ## Conclusion
 
-For JavaScript projects, Turndown.js is the safe default. For Python, html2text works for simple cases. For high-volume pipelines where speed and accuracy matter, [Supermarkdown](https://supermarkdown.dev) handles the conversion in Rust with correct output for tables, nested lists, code blocks, and malformed HTML.
+The HTML to markdown converter you choose depends on three factors: your programming language, your tolerance for malformed HTML, and whether you need content extraction alongside conversion.
 
-If you need to convert live web pages (not just HTML strings), [Reader](https://docs.reader.dev) handles the full pipeline from URL to clean markdown, including JavaScript rendering and content extraction.
+For most JavaScript projects, Turndown.js remains the default. For Python, markdownify. For Rust or high performance pipelines, Supermarkdown combines speed, robustness, and content filtering in a single pass. For the full pipeline from URL to clean markdown, Reader handles everything.
