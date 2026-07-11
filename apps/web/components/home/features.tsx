@@ -1,14 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Globe, Layers, Monitor } from "lucide-react";
+import { Globe, Layers, Monitor, Braces } from "lucide-react";
 
 const capabilities = [
   {
     icon: Globe,
     title: "Read",
     description:
-      "Give Reader a URL. Get back clean markdown, HTML, or structured data. JavaScript rendering, anti-bot protection, proxy rotation - all handled automatically. One credit, one page, every time.",
+      "Give Reader a URL. Get back clean markdown, HTML, or structured data. JavaScript rendering, anti-bot protection, proxy rotation. All handled automatically. One credit, one page, every time.",
     badge: null,
   },
   {
@@ -23,6 +23,13 @@ const capabilities = [
     title: "Browse",
     description:
       "Spin up cloud browser sessions with full Playwright/Puppeteer compatibility. Log into portals, navigate authenticated dashboards, hold sessions for hours. Your scripts connect over CDP - zero new APIs to learn.",
+    badge: null,
+  },
+  {
+    icon: Braces,
+    title: "Extract",
+    description:
+      "Pull structured data from any page with a JSON schema or natural language prompt. Prices, contacts, product specs - returned as typed JSON. Powered by AI, validated on output.",
     badge: null,
   },
 ];
@@ -55,7 +62,7 @@ export function Features() {
             What Reader Does
           </h2>
           <p className="text-lg text-fg-muted max-w-xl mx-auto">
-            Three primitives. One platform. Complete web access.
+            Four primitives. One platform. Complete web access.
           </p>
         </motion.div>
 
@@ -64,7 +71,7 @@ export function Features() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true }}
-          className="grid md:grid-cols-3 gap-4 max-w-5xl mx-auto"
+          className="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto"
         >
           {capabilities.map((cap) => (
             <motion.div

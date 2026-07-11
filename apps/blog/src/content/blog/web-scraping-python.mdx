@@ -124,6 +124,7 @@ Price: £54.23
 BeautifulSoup provides three ways to find elements. `find()` returns the first match or None. `find_all()` returns a list of all matches. `select()` uses CSS selectors, which are often the most readable for complex queries. For example, `soup.select("div.product > h3 > a")` is clearer than nested `find` calls.
 
 Common selector patterns:
+
 - `soup.select("div.classname")` finds divs with a specific class
 - `soup.select("#element-id")` finds an element by ID
 - `soup.select("div > p")` finds direct child paragraphs of divs
@@ -614,15 +615,15 @@ Reader is available at [reader.dev](https://reader.dev) with 1,000 free pages pe
 
 ## When to Use Each Method
 
-| Criteria | requests + BS4 | Playwright | Scrapy | Reader |
-|----------|---------------|------------|--------|--------|
-| JavaScript rendering | No | Yes | No (needs plugin) | Yes |
-| Anti-bot bypass | No | Partial | No | Yes |
-| Speed | Fastest | Slowest | Fast | Fast (managed) |
-| Scale | Manual | Heavy (RAM) | Built in | Built in |
-| Learning curve | Low | Medium | High | Low |
-| Output format | Raw HTML | Raw HTML | Raw HTML | Clean markdown |
-| Best for | Static pages, learning | JS pages, interactions | Large crawls | Production pipelines |
+| Criteria             | requests + BS4         | Playwright             | Scrapy            | Reader               |
+| -------------------- | ---------------------- | ---------------------- | ----------------- | -------------------- |
+| JavaScript rendering | No                     | Yes                    | No (needs plugin) | Yes                  |
+| Anti-bot bypass      | No                     | Partial                | No                | Yes                  |
+| Speed                | Fastest                | Slowest                | Fast              | Fast (managed)       |
+| Scale                | Manual                 | Heavy (RAM)            | Built in          | Built in             |
+| Learning curve       | Low                    | Medium                 | High              | Low                  |
+| Output format        | Raw HTML               | Raw HTML               | Raw HTML          | Clean markdown       |
+| Best for             | Static pages, learning | JS pages, interactions | Large crawls      | Production pipelines |
 
 ## Conclusion
 

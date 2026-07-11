@@ -1,0 +1,667 @@
+---
+title: "Web Scraping with Go: A Practical Guide (2026)"
+description: "Learn web scraping in Go with net/http, goquery, Colly, and chromedp. From basic HTML parsing to browser automation and managed scraping with Reader."
+date: 2026-07-09
+author: "Nihal Kaul"
+category: "Guides"
+keywords: ["web scraping go", "golang web scraper", "colly scraping", "go http scraping"]
+schemaType: "howto"
+faq:
+  - question: "Is Go good for web scraping?"
+    answer: "Go excels at web scraping when performance and concurrency matter. Goroutines handle hundreds of concurrent requests with minimal memory overhead. Compiled binaries deploy without runtime dependencies. The standard library's HTTP client is capable and efficient. The main disadvantage compared to Python is that the scraping ecosystem has fewer libraries and community resources."
+  - question: "What is the best Go scraping library?"
+    answer: "goquery for simple HTML parsing with jQuery style CSS selectors. Colly for structured crawling with built in scheduling, rate limiting, concurrency control, and proxy rotation. chromedp for JavaScript rendered pages that require a real browser. Each serves a different use case."
+  - question: "Can Go scrape JavaScript rendered pages?"
+    answer: "Yes, through chromedp, which drives Chrome via the Chrome DevTools Protocol. For managed JavaScript rendering without running a browser in your Go application, Reader's API handles rendering and returns clean markdown through a simple HTTP POST."
+  - question: "How does Go compare to Python for web scraping?"
+    answer: "Go is faster and more memory efficient for concurrent scraping. Python has a larger ecosystem of scraping libraries and more community resources. Go's strong typing catches data extraction errors at compile time. Python's dynamic typing is faster for prototyping. Use Go when performance and deployment simplicity matter. Use Python when you want the broadest ecosystem."
+---
+
+Go is an excellent choice for web scraping when performance and concurrency matter. Goroutines make it trivial to scrape hundreds of pages concurrently with minimal memory overhead. The standard library includes a capable HTTP client. And the compiled binary deploys anywhere without runtime dependencies, which makes Go scrapers easy to containerize and run in production.
+
+This guide covers three approaches: net/http with goquery for static pages, Colly for structured crawling with built in scheduling and rate limiting, and chromedp for JavaScript rendered sites that require a real browser. It also shows how to integrate with Reader's API for managed scraping where infrastructure is handled for you.
+
+## Prerequisites
+
+Go 1.21 or newer. Initialize a module:
+
+```bash
+mkdir scraper && cd scraper
+go mod init scraper
+```
+
+## Method 1: net/http and goquery
+
+The standard library's net/http client handles HTTP requests. goquery adds jQuery style DOM traversal on top of the response body. Together they cover the basics: fetching a page, finding elements, and extracting text and attributes.
+
+### Install
+
+```bash
+go get github.com/PuerkitoBio/goquery
+```
+
+### Fetch and Parse a Page
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "net/http"
+
+    "github.com/PuerkitoBio/goquery"
+)
+
+func main() {
+    // Create a request with proper headers
+    req, err := http.NewRequest("GET", "https://books.toscrape.com/", nil)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    req.Header.Set("User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "+
+            "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+    req.Header.Set("Accept",
+        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+    req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != 200 {
+        log.Fatalf("Status code: %d", resp.StatusCode)
+    }
+
+    doc, err := goquery.NewDocumentFromReader(resp.Body)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    doc.Find("article.product_pod").Each(func(i int, s *goquery.Selection) {
+        title, _ := s.Find("h3 a").Attr("title")
+        price := s.Find(".price_color").Text()
+        rating, _ := s.Find(".star-rating").Attr("class")
+
+        fmt.Printf("%s: %s (%s)\n", title, price, rating)
+    })
+}
+```
+
+Output:
+```
+A Light in the Attic: £51.77 (star-rating Three)
+Tipping the Velvet: £53.74 (star-rating One)
+Soumission: £50.10 (star-rating One)
+Sharp Objects: £47.82 (star-rating Four)
+Sapiens: A Brief History of Humankind: £54.23 (star-rating Five)
+```
+
+goquery provides `Find()` with CSS selectors, `Each()` for iteration, `Attr()` for attributes, and `Text()` for text content. The API is familiar to anyone who has used jQuery, Cheerio, or BeautifulSoup's `select` method.
+
+Always set proper headers on the request. Go's default net/http client sends `Go-http-client/2.0` as the User Agent, which is immediately recognizable as a bot. Setting a Chrome User Agent along with Accept and Accept-Language headers is the minimum to avoid basic blocks.
+
+### Extracting Structured Data
+
+For more complex extraction, define a struct and populate it:
+
+```go
+type Book struct {
+    Title    string  `json:"title"`
+    Price    string  `json:"price"`
+    Rating   string  `json:"rating"`
+    URL      string  `json:"url"`
+    InStock  bool    `json:"in_stock"`
+}
+
+func extractBooks(doc *goquery.Document, baseURL string) []Book {
+    var books []Book
+
+    doc.Find("article.product_pod").Each(func(i int, s *goquery.Selection) {
+        title, _ := s.Find("h3 a").Attr("title")
+        price := s.Find(".price_color").Text()
+
+        // Extract rating from class name
+        ratingClass, _ := s.Find(".star-rating").Attr("class")
+        // "star-rating Three" -> "Three"
+        parts := strings.Split(ratingClass, " ")
+        rating := ""
+        if len(parts) > 1 {
+            rating = parts[1]
+        }
+
+        // Build absolute URL from relative link
+        link, _ := s.Find("h3 a").Attr("href")
+        fullURL := baseURL + link
+
+        // Check stock status
+        inStock := s.Find(".instock").Length() > 0
+
+        books = append(books, Book{
+            Title:   title,
+            Price:   price,
+            Rating:  rating,
+            URL:     fullURL,
+            InStock: inStock,
+        })
+    })
+
+    return books
+}
+```
+
+Go's strong typing means you define the shape of your data upfront. This catches extraction errors at compile time rather than at runtime, which is a meaningful advantage over dynamically typed scrapers in Python or JavaScript.
+
+### Handling Pagination
+
+Follow next page links until there are none:
+
+```go
+func scrapeAllPages(startURL string) []Book {
+    var allBooks []Book
+    url := startURL
+    client := &http.Client{}
+
+    for url != "" {
+        req, _ := http.NewRequest("GET", url, nil)
+        req.Header.Set("User-Agent", "Mozilla/5.0 ...")
+
+        resp, err := client.Do(req)
+        if err != nil {
+            log.Printf("Error fetching %s: %v", url, err)
+            break
+        }
+
+        doc, _ := goquery.NewDocumentFromReader(resp.Body)
+        resp.Body.Close()
+
+        books := extractBooks(doc, "https://books.toscrape.com/catalogue/")
+        allBooks = append(allBooks, books...)
+
+        // Find next page link
+        nextLink, exists := doc.Find("li.next a").Attr("href")
+        if exists {
+            // Resolve relative URL
+            base, _ := neturl.Parse(url)
+            ref, _ := neturl.Parse(nextLink)
+            url = base.ResolveReference(ref).String()
+        } else {
+            url = ""
+        }
+
+        // Rate limiting
+        time.Sleep(time.Second)
+
+        fmt.Printf("Scraped page, total books: %d\n", len(allBooks))
+    }
+
+    return allBooks
+}
+```
+
+Use `net/url` to resolve relative URLs. Most sites use relative links for pagination, and building URLs manually with string concatenation breaks on edge cases.
+
+### Saving Results
+
+```go
+import (
+    "encoding/csv"
+    "encoding/json"
+    "os"
+)
+
+// JSON
+func saveJSON(books []Book, filename string) error {
+    file, err := os.Create(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    encoder := json.NewEncoder(file)
+    encoder.SetIndent("", "  ")
+    return encoder.Encode(books)
+}
+
+// CSV
+func saveCSV(books []Book, filename string) error {
+    file, err := os.Create(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    writer := csv.NewWriter(file)
+    defer writer.Flush()
+
+    // Header
+    writer.Write([]string{"title", "price", "rating", "url", "in_stock"})
+
+    for _, b := range books {
+        writer.Write([]string{
+            b.Title,
+            b.Price,
+            b.Rating,
+            b.URL,
+            fmt.Sprintf("%t", b.InStock),
+        })
+    }
+
+    return nil
+}
+```
+
+### Limitations of net/http and goquery
+
+This approach works for static HTML pages where all content is present in the server response. It cannot render JavaScript, handle anti bot challenges that require browser execution, or manage complex session state with CSRF tokens and dynamic cookies.
+
+Go's net/http also produces a non browser TLS fingerprint. Anti bot systems that check JA3/JA4 fingerprints will detect the Go client regardless of what User Agent you set. For sites with Cloudflare, DataDome, or Akamai protection, you need a real browser.
+
+## Method 2: Colly
+
+Colly is Go's most popular scraping framework. It provides request scheduling, rate limiting, caching, concurrent scraping, automatic cookie handling, robots.txt compliance, and a callback based architecture that makes crawling logic clean and readable.
+
+### Install
+
+```bash
+go get github.com/gocolly/colly/v2
+```
+
+### Basic Crawling
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "time"
+
+    "github.com/gocolly/colly/v2"
+)
+
+func main() {
+    c := colly.NewCollector(
+        colly.AllowedDomains("books.toscrape.com"),
+        colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "+
+            "AppleWebKit/537.36 (KHTML, like Gecko) "+
+            "Chrome/126.0.0.0 Safari/537.36"),
+    )
+
+    // Rate limiting: 2 concurrent requests, 1 second delay
+    c.Limit(&colly.LimitRule{
+        DomainGlob:  "*",
+        Parallelism: 2,
+        Delay:       1 * time.Second,
+    })
+
+    // Extract book data
+    c.OnHTML("article.product_pod", func(e *colly.HTMLElement) {
+        title := e.ChildAttr("h3 a", "title")
+        price := e.ChildText(".price_color")
+        fmt.Printf("%s: %s\n", title, price)
+    })
+
+    // Follow pagination
+    c.OnHTML("li.next a", func(e *colly.HTMLElement) {
+        nextPage := e.Attr("href")
+        e.Request.Visit(nextPage)
+    })
+
+    // Error handling
+    c.OnError(func(r *colly.Response, err error) {
+        log.Printf("Error on %s: %v", r.Request.URL, err)
+    })
+
+    // Request logging
+    c.OnRequest(func(r *colly.Request) {
+        fmt.Printf("Visiting: %s\n", r.URL)
+    })
+
+    c.Visit("https://books.toscrape.com/")
+}
+```
+
+Colly's callback architecture makes the separation of concerns clear. `OnHTML` fires when a CSS selector matches in the response. `OnError` handles failures. `OnRequest` runs before each request. The `Visit` and `Request.Visit` methods handle URL resolution and deduplication automatically.
+
+### Advanced Colly Features
+
+```go
+// Async scraping with a wait group
+c.Async = true
+
+// Custom headers per request
+c.OnRequest(func(r *colly.Request) {
+    r.Headers.Set("Accept-Language", "en-US,en;q=0.9")
+    r.Headers.Set("Referer", "https://books.toscrape.com/")
+})
+
+// Response caching (avoid re-fetching during development)
+c.CacheDir = "./colly_cache"
+
+// Proxy rotation
+c.SetProxyFunc(func(r *http.Request) (*url.URL, error) {
+    proxies := []string{
+        "http://proxy1:8080",
+        "http://proxy2:8080",
+        "http://proxy3:8080",
+    }
+    proxy := proxies[rand.Intn(len(proxies))]
+    return url.Parse(proxy)
+})
+
+// Distributed scraping with Redis
+// go get github.com/gocolly/redisstorage
+// c.SetStorage(redisstorage.New("localhost:6379", "", "", 0))
+
+c.Wait() // Wait for async collectors to finish
+```
+
+Colly also supports request deduplication (it will not visit the same URL twice), robots.txt compliance, and automatic retry with backoff.
+
+### When to Use Colly vs net/http
+
+Use Colly when you need to crawl many pages across a site with built in scheduling, rate limiting, deduplication, and retry logic. Colly handles the operational complexity of large crawls that would require significant custom code with net/http and goquery.
+
+Use net/http and goquery for simple, one off scraping tasks or when you need more control over the HTTP layer than Colly's abstraction allows.
+
+### Limitations of Colly
+
+Colly does not render JavaScript. It works with raw HTML responses, so content loaded dynamically through React, Vue, or other frameworks is invisible. The colly-playwright integration exists but adds significant complexity.
+
+Colly is also an HTTP level scraper, which means it does not handle anti bot systems that require browser level verification (JavaScript challenges, CAPTCHA solving, TLS fingerprint matching).
+
+## Method 3: chromedp
+
+chromedp is a pure Go package for driving Chrome via the Chrome DevTools Protocol. It launches a headless Chrome instance and gives you full browser control for JavaScript rendered pages.
+
+### Install
+
+```bash
+go get github.com/chromedp/chromedp
+```
+
+Chrome or Chromium must be installed on the system.
+
+### Basic Browser Scraping
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "time"
+
+    "github.com/chromedp/chromedp"
+)
+
+func main() {
+    ctx, cancel := chromedp.NewContext(context.Background())
+    defer cancel()
+
+    // Set a timeout
+    ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+    defer cancel()
+
+    var titles []string
+    var prices []string
+
+    err := chromedp.Run(ctx,
+        chromedp.Navigate("https://books.toscrape.com/"),
+        chromedp.WaitVisible("article.product_pod"),
+
+        // Extract titles
+        chromedp.Evaluate(`
+            Array.from(document.querySelectorAll("article.product_pod h3 a"))
+                .map(a => a.getAttribute("title"))
+        `, &titles),
+
+        // Extract prices
+        chromedp.Evaluate(`
+            Array.from(document.querySelectorAll("article.product_pod .price_color"))
+                .map(el => el.textContent.trim())
+        `, &prices),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    for i := 0; i < len(titles) && i < len(prices); i++ {
+        fmt.Printf("%s: %s\n", titles[i], prices[i])
+    }
+}
+```
+
+chromedp uses Go's context system for cancellation and timeouts. The `chromedp.Run` function executes a sequence of actions: navigate to a URL, wait for elements, and extract data. The `Evaluate` action runs JavaScript in the browser context and deserializes the result into Go variables.
+
+### Handling Dynamic Content
+
+For pages with infinite scroll or lazy loaded content:
+
+```go
+err := chromedp.Run(ctx,
+    chromedp.Navigate("https://example.com/products"),
+    chromedp.WaitVisible(".product-card"),
+
+    // Scroll to load more content
+    chromedp.ActionFunc(func(ctx context.Context) error {
+        for i := 0; i < 5; i++ {
+            chromedp.Evaluate(`window.scrollTo(0, document.body.scrollHeight)`, nil).Do(ctx)
+            time.Sleep(2 * time.Second)
+        }
+        return nil
+    }),
+
+    // Click a button if it exists
+    chromedp.ActionFunc(func(ctx context.Context) error {
+        var exists bool
+        chromedp.Evaluate(`!!document.querySelector("button.load-more")`, &exists).Do(ctx)
+        if exists {
+            chromedp.Click("button.load-more").Do(ctx)
+            chromedp.WaitVisible(".product-card:nth-child(20)").Do(ctx)
+        }
+        return nil
+    }),
+
+    // Extract after all content is loaded
+    chromedp.Evaluate(`
+        Array.from(document.querySelectorAll(".product-card")).map(el => ({
+            name: el.querySelector(".name")?.textContent?.trim() || "",
+            price: el.querySelector(".price")?.textContent?.trim() || ""
+        }))
+    `, &results),
+)
+```
+
+### Taking Screenshots
+
+```go
+var buf []byte
+err := chromedp.Run(ctx,
+    chromedp.Navigate("https://example.com"),
+    chromedp.FullScreenshot(&buf, 90),
+)
+os.WriteFile("screenshot.png", buf, 0644)
+```
+
+Screenshots are invaluable for debugging when a scraper stops working. The screenshot shows exactly what the browser sees, which might be a CAPTCHA page, a login wall, or an unexpected layout.
+
+### Limitations of chromedp
+
+chromedp requires Chrome or Chromium installed on the system. Each browser instance uses significant memory (50 to 200MB). Page loads take seconds instead of milliseconds. Managing a pool of browser instances, handling crashes, and cleaning up resources adds operational complexity.
+
+Like Puppeteer and Playwright, headless Chrome can be detected by anti bot systems through `navigator.webdriver`, missing plugins, and other browser fingerprinting signals.
+
+## Concurrent Scraping in Go
+
+Go's goroutines and channels make concurrent scraping straightforward and memory efficient compared to thread based concurrency in other languages.
+
+```go
+func scrapeConcurrent(urls []string, concurrency int) []string {
+    results := make(chan string, len(urls))
+    sem := make(chan struct{}, concurrency)
+
+    var wg sync.WaitGroup
+
+    for _, url := range urls {
+        wg.Add(1)
+        go func(u string) {
+            defer wg.Done()
+
+            sem <- struct{}{}        // Acquire semaphore
+            defer func() { <-sem }() // Release semaphore
+
+            client := &http.Client{Timeout: 10 * time.Second}
+            req, _ := http.NewRequest("GET", u, nil)
+            req.Header.Set("User-Agent", "Mozilla/5.0 ...")
+
+            resp, err := client.Do(req)
+            if err != nil {
+                log.Printf("Error: %s: %v", u, err)
+                return
+            }
+            defer resp.Body.Close()
+
+            doc, _ := goquery.NewDocumentFromReader(resp.Body)
+            title := doc.Find("title").Text()
+
+            results <- fmt.Sprintf("%s: %s", u, title)
+
+            // Rate limiting per goroutine
+            time.Sleep(time.Duration(500+rand.Intn(1500)) * time.Millisecond)
+        }(url)
+    }
+
+    go func() {
+        wg.Wait()
+        close(results)
+    }()
+
+    var output []string
+    for r := range results {
+        output = append(output, r)
+    }
+    return output
+}
+```
+
+The semaphore pattern (`sem := make(chan struct{}, concurrency)`) limits the number of concurrent requests. Each goroutine acquires a slot before making a request and releases it when done. This prevents overwhelming the target server while still scraping faster than sequential requests.
+
+A goroutine uses roughly 2KB of initial stack space compared to 1MB+ for a thread in most languages. You can run thousands of goroutines concurrently without exhausting memory.
+
+## Using Reader from Go
+
+Reader does not have an official Go SDK. You integrate through the REST API using Go's standard net/http client.
+
+```go
+package main
+
+import (
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "io"
+    "log"
+    "net/http"
+)
+
+type ReadRequest struct {
+    URL      string `json:"url"`
+    MaxDepth int    `json:"maxDepth,omitempty"`
+    MaxPages int    `json:"maxPages,omitempty"`
+}
+
+type ReadResponse struct {
+    Kind string `json:"kind"`
+    Data struct {
+        URL      string `json:"url"`
+        Markdown string `json:"markdown"`
+        Metadata struct {
+            Title      string `json:"title"`
+            StatusCode int    `json:"statusCode"`
+        } `json:"metadata"`
+    } `json:"data"`
+}
+
+func scrapeWithReader(targetURL string) (*ReadResponse, error) {
+    body, err := json.Marshal(ReadRequest{URL: targetURL})
+    if err != nil {
+        return nil, err
+    }
+
+    req, err := http.NewRequest("POST", "https://api.reader.dev/v1/read",
+        bytes.NewBuffer(body))
+    if err != nil {
+        return nil, err
+    }
+
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("x-api-key", "rdr_your_api_key")
+
+    resp, err := http.DefaultClient.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+
+    respBody, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+
+    var result ReadResponse
+    if err := json.Unmarshal(respBody, &result); err != nil {
+        return nil, err
+    }
+
+    return &result, nil
+}
+
+func main() {
+    result, err := scrapeWithReader("https://example.com")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Printf("Title: %s\n", result.Data.Metadata.Title)
+    fmt.Printf("Markdown length: %d chars\n", len(result.Data.Markdown))
+    fmt.Println(result.Data.Markdown[:500])
+}
+```
+
+Reader handles JavaScript rendering, anti bot bypass, proxy rotation, and markdown conversion. One HTTP call replaces the entire chain of setting up a browser, configuring proxies, handling retries, and parsing content. The output is clean markdown, ready for LLM consumption, storage, or further processing.
+
+For crawling, add `MaxDepth` and `MaxPages` to the request body. The response is an async job that you poll for completion.
+
+```go
+result, err := scrapeWithReader("https://docs.example.com")
+// For crawls, result.Kind == "job"
+// Poll the job status endpoint until completion
+```
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## When to Use Each Approach
+
+| Criteria | net/http + goquery | Colly | chromedp | Reader |
+|----------|-------------------|-------|----------|--------|
+| JavaScript rendering | No | No | Yes | Yes |
+| Anti bot bypass | No | No | Partial | Yes |
+| Concurrency model | Goroutines (manual) | Built in scheduling | Context based | Managed |
+| Rate limiting | Manual | Built in | Manual | Managed |
+| Learning curve | Low | Medium | Medium | Low |
+| Best for | Simple static pages | Structured crawling | JS rendered pages | Production pipelines |
+| Output format | Raw HTML | Raw HTML | Raw HTML | Clean markdown |
+
+## Conclusion
+
+Go web scraping follows a clear path. net/http and goquery for static pages with high concurrency through goroutines. Colly for structured crawling with built in scheduling, rate limiting, and deduplication. chromedp for JavaScript rendered pages that need a real browser. Reader's API for managed scraping where you want the infrastructure handled for you.
+
+Go's concurrency model gives it a genuine advantage for scraping at scale. Goroutines are lightweight (2KB vs 1MB+ per thread), channels provide safe communication between concurrent operations, and the compiled binary deploys without runtime dependencies.

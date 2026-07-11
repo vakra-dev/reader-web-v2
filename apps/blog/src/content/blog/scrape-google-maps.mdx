@@ -1,0 +1,462 @@
+---
+title: "How to Scrape Google Maps Business Data (2026)"
+description: "Learn how to extract business data from Google Maps including names, addresses, ratings, and reviews using Python, Playwright, and Reader."
+date: 2026-07-09
+author: "Nihal Kaul"
+category: "Guides"
+keywords: ["scrape google maps", "google maps scraper", "business data extraction", "local business scraping"]
+schemaType: "howto"
+faq:
+  - question: "Should I use the Google Places API instead of scraping?"
+    answer: "The Places API is the recommended first option. It provides structured business data through official endpoints with no risk of blocks or terms of service issues. The limitations are cost ($17 to $32 per 1,000 requests), a maximum of 5 reviews per business, no popular times data, and a 60 business limit per Nearby Search query. When these limitations matter, scraping fills the gap."
+  - question: "Why does a static HTTP request to Google Maps return empty HTML?"
+    answer: "Google Maps is a single page application built entirely with JavaScript. The initial HTML response contains the application shell (loading scripts, framework code) but no business data. The actual content loads dynamically through JavaScript after the page loads. You need a browser to execute the JavaScript and render the content."
+  - question: "How do I handle infinite scroll on Maps?"
+    answer: "Use Playwright or Puppeteer to programmatically scroll the results panel, wait for new results to load, and repeat until the count stops increasing or you reach your target. Scroll the results panel specifically (the div with role=\"feed\"), not the entire page. Reader's browser sessions provide the same capability with built in stealth."
+  - question: "How much does the Google Places API cost?"
+    answer: "Google provides $200 of free monthly credit. Beyond that, Nearby Search and Text Search cost $32 per 1,000 requests. Place Details costs $17 per 1,000 requests. The free tier covers approximately 6,250 to 11,765 requests per month depending on the endpoints used."
+---
+
+Google Maps contains the richest database of local business information available on the public web. Business names, addresses, phone numbers, operating hours, ratings, review counts, categories, photos, and GPS coordinates for millions of businesses worldwide. This data powers lead generation, market research, local SEO analysis, competitive intelligence, and business directory applications.
+
+Extracting this data programmatically is challenging because Google Maps is a heavily dynamic, JavaScript rendered single page application. There is no static HTML to parse. Every piece of data loads dynamically through JavaScript, and the interface relies on scrolling, clicking, and map interactions to reveal content. This guide covers what data is available, the Google Places API as an official alternative, the specific challenges of scraping Maps, practical approaches with Python, and how Reader's browser sessions help.
+
+## What Data Google Maps Contains
+
+### Business Listings
+
+A Google Maps search returns a scrollable list of business cards matching the query. Each card displays the business name, star rating (1 to 5, with one decimal), total review count, business category (restaurant, dentist, plumber, hotel), price level ($ to $$$$), address or neighborhood, and operating status (open now, closed, temporarily closed).
+
+### Business Detail Pages
+
+Clicking a business card opens a detail panel with significantly more data. The full detail view includes:
+
+The complete street address, phone number (with country code), website URL, and a link to directions. Operating hours for each day of the week, including special hours for holidays. The aggregate star rating, total review count, and a histogram showing the distribution of 1 through 5 star ratings.
+
+Individual reviews with reviewer name, star rating, review text, review date, and whether the reviewer is a Local Guide. Photos uploaded by the business and by customers. Popular times data showing typical visit patterns by hour and day. The business description (written by the business owner). Attributes like wheelchair accessible, outdoor seating, delivery, takeout, dine in, and Wi-Fi availability.
+
+For businesses with a Google Business Profile, additional data includes the business owner's responses to reviews, Q&A sections with user submitted questions and owner answers, and menu or service listings.
+
+### Map Data
+
+The map itself shows business markers with basic information (name, rating, category) that appear as you pan and zoom. Map data loads lazily based on the visible viewport. Zooming into a neighborhood loads businesses in that area. Panning loads businesses in the new visible region.
+
+## Google Places API: The Official Alternative
+
+Before building a Maps scraper, evaluate the Google Places API. It provides structured, reliable, authenticated access to business data.
+
+### What the API Provides
+
+The **Nearby Search** endpoint finds businesses within a specified radius of a location. The **Text Search** endpoint finds businesses matching a text query (similar to what you type into Maps). The **Place Details** endpoint returns comprehensive information for a specific business.
+
+The API returns structured JSON with business name, address components, phone number, website, rating, review count, opening hours, photos (as URLs), and place types. The Place Details endpoint includes up to 5 reviews per business.
+
+### API Pricing
+
+The Places API uses a pay per request model. Nearby Search and Text Search cost $32 per 1,000 requests. Place Details costs $17 per 1,000 requests. Place Photos costs $7 per 1,000 requests. Google provides $200 of free monthly credit, which covers approximately 6,250 Nearby Search requests or 11,765 Place Details requests per month.
+
+### When the API Falls Short
+
+The API has limitations that drive teams to scraping. It returns a maximum of 5 reviews per business (Maps shows all reviews). It does not provide popular times data. It does not include the review histogram. It limits Nearby Search results to 60 businesses per query (3 pages of 20). And the cost scales linearly with volume, making large scale data collection expensive.
+
+For structured business lookup at moderate volume (thousands of businesses), the API is the most reliable and legally straightforward option. For large scale data collection, data not available through the API, or cost sensitive use cases, scraping becomes necessary.
+
+## Why Google Maps Is Hard to Scrape
+
+Google Maps presents unique challenges that go beyond standard anti bot protection.
+
+### Single Page Application Architecture
+
+Maps is a JavaScript application, not a collection of HTML pages. The entire interface (search results, business listings, map tiles, reviews, photos) renders dynamically in the browser through JavaScript. A static HTTP request to a Maps URL returns an empty shell with no business data. You cannot use requests and BeautifulSoup on Maps.
+
+### Infinite Scroll
+
+The search results panel does not use pagination. Instead, it loads more results as you scroll down. There is no "next page" link. The data arrives in response to scroll events through background API calls that the JavaScript application makes. Automated scrolling is required to load a complete set of results.
+
+### Dynamic Loading and Lazy Rendering
+
+Business detail panels slide in as overlays rather than loading as separate pages. Map tiles load lazily based on the viewport. Photos load on demand. Reviews paginate within the detail panel with a "More reviews" button. Each of these interactions requires a browser that can execute JavaScript and respond to DOM events.
+
+### Anti Bot Protection
+
+Google applies the same anti bot protections to Maps that it applies to Search: CAPTCHAs, rate limiting, IP blocking, and behavioral analysis. The browser fingerprint generation, header verification, and cookie management requirements are the same as described in the Google Search scraping guide.
+
+### Selector Instability
+
+Google Maps uses obfuscated class names that change between deployments. Structural selectors (element hierarchy, ARIA roles, data attributes) are more stable than class names but still change. Any Maps scraper requires regular selector maintenance.
+
+## Scraping with Playwright
+
+A full browser is required because Maps has no usable static HTML. Playwright launches Chrome, performs searches, scrolls through results, and clicks on listings to extract data.
+
+### Basic Search Results Extraction
+
+```python
+from playwright.sync_api import sync_playwright
+import time
+import json
+
+def scrape_google_maps(query, max_results=20):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/126.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080},
+            locale="en-US",
+            geolocation={"longitude": -73.985428, "latitude": 40.748817},
+            permissions=["geolocation"],
+        )
+        page = context.new_page()
+
+        # Navigate to Maps with a search query
+        search_url = (f"https://www.google.com/maps/search/"
+                      f"{query.replace(' ', '+')}")
+        page.goto(search_url)
+
+        # Wait for results panel to load
+        page.wait_for_selector("div[role='feed']", timeout=15000)
+        time.sleep(2)
+
+        # Scroll the results panel to load more businesses
+        results_panel = page.query_selector("div[role='feed']")
+        previous_count = 0
+
+        for scroll_attempt in range(10):
+            # Scroll within the results panel (not the page)
+            page.evaluate("""
+                (el) => el.scrollTo(0, el.scrollHeight)
+            """, results_panel)
+            time.sleep(2)
+
+            # Count current results
+            current_count = page.evaluate("""
+                () => document.querySelectorAll(
+                    'div[role="feed"] > div > div > a[href*="/maps/place"]'
+                ).length
+            """)
+
+            print(f"Scroll {scroll_attempt + 1}: {current_count} businesses")
+
+            if current_count >= max_results:
+                break
+            if current_count == previous_count:
+                print("No new results loaded. Reached the end.")
+                break
+            previous_count = current_count
+
+        # Extract business data from the cards
+        businesses = page.evaluate("""
+            () => {
+                const cards = document.querySelectorAll(
+                    'div[role="feed"] > div > div > a[href*="/maps/place"]'
+                );
+                return Array.from(cards).map(card => {
+                    const parent = card.closest('div[jsaction]');
+                    if (!parent) return null;
+
+                    // Business name (usually in a heading or bold element)
+                    const nameEl = parent.querySelector(
+                        '.fontHeadlineSmall, [class*="qBF1Pd"]'
+                    );
+
+                    // Rating (from aria-label like "4.5 stars")
+                    const ratingEl = parent.querySelector(
+                        'span[role="img"][aria-label*="star"]'
+                    );
+
+                    // Review count
+                    const reviewEl = parent.querySelector(
+                        'span[aria-label*="review"]'
+                    );
+
+                    // Category and price
+                    const infoEls = parent.querySelectorAll(
+                        '.fontBodyMedium span'
+                    );
+                    const infoTexts = Array.from(infoEls)
+                        .map(el => el.textContent.trim())
+                        .filter(t => t.length > 0);
+
+                    // Address
+                    const addressEl = parent.querySelector(
+                        '[class*="Io6YTe"], .fontBodyMedium > span'
+                    );
+
+                    return {
+                        name: nameEl ? nameEl.textContent.trim() : '',
+                        rating: ratingEl
+                            ? ratingEl.getAttribute('aria-label') : '',
+                        reviews: reviewEl
+                            ? reviewEl.getAttribute('aria-label') : '',
+                        url: card.href || '',
+                        info: infoTexts.slice(0, 3),
+                    };
+                }).filter(b => b && b.name);
+            }
+        """)
+
+        print(f"\nExtracted {len(businesses)} businesses")
+        browser.close()
+        return businesses
+
+# Usage
+results = scrape_google_maps("restaurants near Times Square New York", 30)
+for b in results[:10]:
+    print(f"\n{b['name']}")
+    print(f"  Rating: {b['rating']}")
+    print(f"  Reviews: {b['reviews']}")
+    print(f"  Info: {', '.join(b['info'])}")
+```
+
+The selectors above use a combination of ARIA roles (`role="feed"`, `role="img"`), URL patterns (`href*="/maps/place"`), and class names. ARIA roles and URL patterns are more stable than class names but still change. The `fontHeadlineSmall` class is current at the time of writing.
+
+### Extracting Full Business Details
+
+To get complete details (phone, hours, full address, reviews), click on each business card and extract from the detail panel:
+
+```python
+def get_business_details(page, business_url):
+    page.goto(business_url)
+    page.wait_for_selector("h1", timeout=10000)
+    time.sleep(2)
+
+    details = page.evaluate("""
+        () => {
+            const getText = (sel) => {
+                const el = document.querySelector(sel);
+                return el ? el.textContent.trim() : null;
+            };
+
+            // Business name from the heading
+            const name = getText('h1');
+
+            // Address, phone, website from the info section
+            const infoButtons = document.querySelectorAll(
+                'button[data-item-id]'
+            );
+            let address = null, phone = null, website = null;
+
+            infoButtons.forEach(btn => {
+                const id = btn.getAttribute('data-item-id');
+                const text = btn.textContent.trim();
+                if (id && id.startsWith('address'))
+                    address = text;
+                if (id && id.startsWith('phone'))
+                    phone = text;
+                if (id && id.startsWith('authority'))
+                    website = btn.querySelector('a')?.href || text;
+            });
+
+            // Rating
+            const ratingEl = document.querySelector(
+                'div.F7nice span[aria-hidden="true"]'
+            );
+            const rating = ratingEl ? ratingEl.textContent : null;
+
+            // Review count
+            const reviewEl = document.querySelector(
+                'div.F7nice span[aria-label*="review"]'
+            );
+            const reviewCount = reviewEl
+                ? reviewEl.textContent.replace(/[()]/g, '').trim()
+                : null;
+
+            // Hours
+            const hoursTable = document.querySelector(
+                'table.eK4R0e'
+            );
+            let hours = {};
+            if (hoursTable) {
+                hoursTable.querySelectorAll('tr').forEach(row => {
+                    const day = row.querySelector('td:first-child');
+                    const time = row.querySelector('td:last-child');
+                    if (day && time) {
+                        hours[day.textContent.trim()] =
+                            time.textContent.trim();
+                    }
+                });
+            }
+
+            // Category
+            const categoryEl = document.querySelector(
+                'button[jsaction*="category"]'
+            );
+            const category = categoryEl
+                ? categoryEl.textContent.trim() : null;
+
+            return {
+                name, address, phone, website,
+                rating, reviewCount, category, hours
+            };
+        }
+    """)
+
+    return details
+```
+
+Extracting full details requires visiting each business URL individually. For 100 businesses, that is 100 page loads plus the initial search. Budget 3 to 5 seconds per business (page load plus wait for details panel) plus delays between requests. A full extraction of 100 businesses takes roughly 8 to 15 minutes.
+
+### Extracting Reviews
+
+Reviews paginate within the detail panel. To get all reviews for a business:
+
+```python
+def get_reviews(page, max_reviews=50):
+    # Click the reviews tab/section
+    reviews_button = page.query_selector(
+        'button[aria-label*="Reviews"]'
+    )
+    if reviews_button:
+        reviews_button.click()
+        time.sleep(2)
+
+    # Scroll to load more reviews
+    reviews_panel = page.query_selector(
+        'div.m6QErb[aria-label]'
+    )
+    if not reviews_panel:
+        return []
+
+    for _ in range(max_reviews // 5):
+        page.evaluate("""
+            (el) => el.scrollTo(0, el.scrollHeight)
+        """, reviews_panel)
+        time.sleep(1.5)
+
+    # Extract review data
+    reviews = page.evaluate("""
+        () => {
+            const reviewEls = document.querySelectorAll(
+                'div[data-review-id]'
+            );
+            return Array.from(reviewEls).map(el => {
+                const author = el.querySelector(
+                    '.d4r55'
+                )?.textContent?.trim() || '';
+                const rating = el.querySelector(
+                    'span[role="img"]'
+                )?.getAttribute('aria-label') || '';
+                const text = el.querySelector(
+                    '.MyEned span'
+                )?.textContent?.trim() || '';
+                const date = el.querySelector(
+                    '.rsqaWe'
+                )?.textContent?.trim() || '';
+
+                return { author, rating, text, date };
+            });
+        }
+    """)
+
+    return reviews
+```
+
+## Using Reader
+
+For Google Maps scraping, Reader's browser session primitive is the appropriate tool because Maps requires real browser interaction (scrolling, clicking, map panning) that a simple scrape call cannot handle.
+
+### Browser Session for Maps
+
+```python
+from reader_py import ReaderClient
+from playwright.sync_api import sync_playwright
+
+reader = ReaderClient(api_key="rdr_your_api_key")
+
+# Create a stealth browser session
+session = reader.sessions.create()
+
+with sync_playwright() as p:
+    # Connect Playwright to Reader's stealth browser
+    browser = p.chromium.connect_over_cdp(session.ws_endpoint)
+    context = browser.contexts[0]
+    page = context.pages[0]
+
+    # Navigate to Maps with a search
+    page.goto(
+        "https://www.google.com/maps/search/"
+        "restaurants+near+Times+Square+New+York"
+    )
+    page.wait_for_selector("div[role='feed']", timeout=15000)
+
+    # Scroll to load results
+    results_panel = page.query_selector("div[role='feed']")
+    for _ in range(5):
+        page.evaluate(
+            "(el) => el.scrollTo(0, el.scrollHeight)",
+            results_panel
+        )
+        import time
+        time.sleep(2)
+
+    # Extract businesses using the same JavaScript as above
+    businesses = page.evaluate("""...""")
+
+    print(f"Found {len(businesses)} businesses")
+
+    browser.close()
+
+# Clean up the session
+reader.sessions.stop(session.session_id)
+```
+
+The advantage of Reader's browser sessions over running Playwright directly is the stealth layer. Reader's browsers include browser fingerprint generation, identity randomization, and proxy rotation. These make the browser session harder for Google to detect as automated.
+
+### Simple Scrape for Business Pages
+
+For individual business pages (direct URLs, not search results), a basic scrape call may work:
+
+```python
+result = reader.read(
+    url="https://www.google.com/maps/place/Example+Restaurant/"
+)
+print(result.data.markdown)
+```
+
+This returns the visible content as clean markdown. It works for individual business pages but does not handle search result scrolling or map interactions.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month.
+
+## Saving Business Data
+
+```python
+import csv
+import json
+
+def save_businesses(businesses, prefix="maps"):
+    # JSON (preserves nested data like hours)
+    with open(f"{prefix}_data.json", "w", encoding="utf-8") as f:
+        json.dump(businesses, f, indent=2, ensure_ascii=False)
+
+    # CSV (flat format for spreadsheets)
+    flat_fields = ["name", "rating", "reviews", "address",
+                   "phone", "website", "category"]
+    with open(f"{prefix}_data.csv", "w", newline="",
+              encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=flat_fields,
+                                extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(businesses)
+
+    print(f"Saved {len(businesses)} businesses")
+```
+
+## Legal and Ethical Considerations
+
+Google Maps data is subject to Google's Terms of Service, which restrict automated access and scraping. The Google Maps Platform Terms of Service specifically prohibit scraping, caching, or storing data from Google Maps except through the official APIs.
+
+The **Google Places API** is the official, sanctioned way to access business data programmatically. It provides structured, reliable data within the terms of service.
+
+Publicly displayed business information (names, addresses, phone numbers, operating hours) is generally considered factual data. However, scraping Google Maps at scale to build a competing directory or dataset raises legal concerns beyond simple terms of service violation.
+
+Review text and photos may have additional copyright considerations. Reviews are authored by individual users and photos may be copyrighted by the business or photographer.
+
+Users are responsible for compliance with applicable laws and service terms in their jurisdiction. This guide is educational and does not constitute legal advice.
+
+## Conclusion
+
+Google Maps scraping requires a real browser because the entire application renders dynamically through JavaScript. Infinite scroll, lazy loading, and overlay panels mean there is no shortcut through static HTML parsing. Every interaction (scrolling results, clicking businesses, loading reviews) requires browser automation.
+
+For production use, start with the Google Places API for structured data access. When the API does not provide the data you need (full review text, popular times, all reviews beyond 5), browser automation with stealth features becomes necessary. Reader's browser sessions add the stealth layer (browser fingerprint generation, identity randomization, and proxy rotation) that makes automated Maps interaction more reliable than running a standard headless browser.

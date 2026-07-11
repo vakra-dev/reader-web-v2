@@ -1,0 +1,634 @@
+---
+title: "Web Scraping with JavaScript and Node.js (2026)"
+description: "Learn web scraping with JavaScript and Node.js. Covers Axios, Cheerio, Puppeteer, Playwright, and Reader for production scraping."
+date: 2026-07-09
+author: "Nihal Kaul"
+category: "Guides"
+keywords: ["web scraping javascript", "nodejs web scraping", "puppeteer scraping", "cheerio scraping"]
+schemaType: "howto"
+faq:
+  - question: "Is JavaScript good for web scraping?"
+    answer: "Yes. Node.js has mature libraries for every scraping need. Puppeteer and Playwright give you direct access to the same browser engines that render the pages you scrape. The async event loop handles concurrent requests efficiently without threads. The ecosystem is second only to Python for scraping."
+  - question: "Should I use Puppeteer or Playwright?"
+    answer: "Playwright is generally the better choice for new projects. It has auto wait (eliminates the most common Puppeteer bug), multi browser support (Chromium, Firefox, WebKit), a stronger locator API, and built in codegen. Puppeteer is solid if you already use it or prefer a lighter package. Reader's browser sessions work with both."
+  - question: "Can I scrape without running a browser?"
+    answer: "Yes, for static HTML pages. Axios and Cheerio fetch and parse HTML without a browser. For JavaScript rendered pages (roughly 80 percent of the modern web), you need a browser or a managed API like Reader that handles rendering for you."
+  - question: "How do I handle rate limiting in Node.js?"
+    answer: "Add delays between requests using setTimeout wrapped in a Promise. Use exponential backoff when you receive 429 (Too Many Requests) responses. Limit concurrency by creating a fixed number of worker functions that pull from a shared queue. Reader handles rate limiting and retries automatically."
+---
+
+JavaScript is the second most popular language for web scraping after Python. Node.js gives you access to the same browser engines that render the pages you are scraping, and the async event loop handles concurrent requests naturally without threads or multiprocessing. The ecosystem covers everything from lightweight HTML parsers to full browser automation frameworks.
+
+This guide covers four approaches: Axios and Cheerio for static pages, Puppeteer for Chrome automation, Playwright for cross browser automation, and Reader for managed scraping at scale. Each section includes working code you can copy and run, expected output, and the limitations that will send you to the next approach.
+
+## Prerequisites
+
+Node.js 18 or newer and npm. Initialize a project:
+
+```bash
+mkdir scraper && cd scraper
+npm init -y
+```
+
+All code examples use CommonJS require syntax. If you prefer ES modules, replace `require` with `import` and add `"type": "module"` to your package.json.
+
+## Method 1: Axios and Cheerio
+
+Axios handles HTTP requests and Cheerio provides jQuery style DOM traversal on the server. This is the JavaScript equivalent of Python's requests and BeautifulSoup. It is fast, lightweight, and the right starting point for scraping static HTML pages.
+
+### Install
+
+```bash
+npm install axios cheerio
+```
+
+### Fetch and Parse a Page
+
+```javascript
+const axios = require('axios');
+const cheerio = require('cheerio');
+
+async function scrape() {
+    const url = 'https://books.toscrape.com/';
+
+    const { data } = await axios.get(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+        }
+    });
+
+    const $ = cheerio.load(data);
+
+    const books = [];
+    $('article.product_pod').each((i, el) => {
+        books.push({
+            title: $(el).find('h3 a').attr('title'),
+            price: $(el).find('.price_color').text(),
+            rating: $(el).find('.star-rating').attr('class').split(' ')[1],
+        });
+    });
+
+    console.log(`Found ${books.length} books`);
+    books.slice(0, 5).forEach(b =>
+        console.log(`${b.title}: ${b.price} (${b.rating})`)
+    );
+}
+
+scrape();
+```
+
+Output:
+```
+Found 20 books
+A Light in the Attic: £51.77 (Three)
+Tipping the Velvet: £53.74 (One)
+Soumission: £50.10 (One)
+Sharp Objects: £47.82 (Four)
+Sapiens: A Brief History of Humankind: £54.23 (Five)
+```
+
+Cheerio parses the HTML string into a DOM structure and gives you jQuery selectors to traverse it. `$('article.product_pod')` finds all matching elements. `.find()` searches within an element. `.attr()` reads attributes. `.text()` reads text content.
+
+Always set a real browser User Agent with Axios. The default Axios User Agent (`axios/1.x`) is immediately flagged as a bot by any anti bot system.
+
+### Extract Nested Data
+
+For more complex extraction, chain selectors and handle missing elements:
+
+```javascript
+$('article.product_pod').each((i, el) => {
+    const $el = $(el);
+
+    // Safe attribute access
+    const link = $el.find('h3 a').attr('href');
+    const fullUrl = new URL(link, url).href;
+
+    // Nested text extraction
+    const title = $el.find('h3 a').attr('title') || 'Unknown';
+    const price = $el.find('.price_color').text().trim();
+
+    // Boolean from element presence
+    const inStock = $el.find('.instock').length > 0;
+
+    books.push({ title, price, fullUrl, inStock });
+});
+```
+
+The `new URL(link, url).href` pattern resolves relative URLs to absolute. This is essential when scraping sites that use relative links (most sites do).
+
+### Handling Pagination
+
+Follow "next page" links until there are none:
+
+```javascript
+async function scrapeAllPages(baseUrl) {
+    let url = baseUrl;
+    const allBooks = [];
+
+    while (url) {
+        const { data } = await axios.get(url, {
+            headers: { 'User-Agent': '...' }
+        });
+        const $ = cheerio.load(data);
+
+        $('article.product_pod').each((i, el) => {
+            allBooks.push({
+                title: $(el).find('h3 a').attr('title'),
+                price: $(el).find('.price_color').text().trim(),
+            });
+        });
+
+        // Find the next page link
+        const nextLink = $('li.next a').attr('href');
+        if (nextLink) {
+            url = new URL(nextLink, url).href;
+        } else {
+            url = null; // No more pages
+        }
+
+        // Rate limiting
+        await new Promise(r => setTimeout(r, 1000));
+    }
+
+    return allBooks;
+}
+
+scrapeAllPages('https://books.toscrape.com/')
+    .then(books => console.log(`Total: ${books.length} books`));
+```
+
+Output:
+```
+Total: 1000 books
+```
+
+The `setTimeout` delay between pages prevents rate limiting and is respectful to the target server. Randomize the delay for production scrapers:
+
+```javascript
+const delay = Math.random() * 1500 + 500; // 500ms to 2000ms
+await new Promise(r => setTimeout(r, delay));
+```
+
+### Limitations of Axios and Cheerio
+
+This approach works for static HTML pages where all content is in the initial server response. It fails in three common scenarios.
+
+JavaScript rendered content. If the page uses React, Vue, Next.js, or any framework that loads content dynamically, `data` contains the empty shell before JavaScript executes. Cheerio cannot run JavaScript. It only parses what the server sends.
+
+Anti bot protection. Sites with Cloudflare, DataDome, or Akamai block Axios based on TLS fingerprint, missing headers, or IP reputation. Axios produces a non browser TLS fingerprint that detection systems catch regardless of headers.
+
+Complex interactions. Logging in, clicking buttons, scrolling to load content, filling forms. Cheerio does not interact with pages. It reads the HTML it is given.
+
+For static, unprotected pages, Axios and Cheerio is the fastest and lightest approach. For everything else, you need a browser.
+
+## Method 2: Puppeteer
+
+Puppeteer is Google's Node.js library for controlling Chrome via the Chrome DevTools Protocol (CDP). It launches a real Chromium browser, renders JavaScript, and gives you full access to the rendered DOM. Puppeteer has roughly 94,000 GitHub stars and about 10.7 million weekly npm downloads, making it the most established browser automation library in the Node.js ecosystem.
+
+### Install
+
+```bash
+npm install puppeteer
+```
+
+This downloads Puppeteer along with a compatible Chromium binary (~170MB).
+
+### Basic Scraping
+
+```javascript
+const puppeteer = require('puppeteer');
+
+async function scrape() {
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+
+    await page.setUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+    );
+
+    await page.goto('https://books.toscrape.com/', {
+        waitUntil: 'networkidle2'
+    });
+
+    const books = await page.evaluate(() => {
+        return Array.from(
+            document.querySelectorAll('article.product_pod')
+        ).map(el => ({
+            title: el.querySelector('h3 a').getAttribute('title'),
+            price: el.querySelector('.price_color').textContent.trim(),
+            rating: el.querySelector('.star-rating').classList[1],
+        }));
+    });
+
+    console.log(`Found ${books.length} books`);
+    books.slice(0, 5).forEach(b =>
+        console.log(`${b.title}: ${b.price} (${b.rating})`)
+    );
+
+    await browser.close();
+}
+
+scrape();
+```
+
+`page.evaluate()` runs JavaScript inside the actual browser context. The function you pass executes in the browser, not in Node.js. This means you have access to the fully rendered DOM after all JavaScript has executed. The return value is serialized and sent back to Node.js.
+
+The `waitUntil: 'networkidle2'` option waits until there are no more than 2 network connections for 500ms. This typically means the page has finished loading dynamic content. Other options include `'load'` (DOMContentLoaded) and `'networkidle0'` (zero connections, stricter but slower).
+
+### Handling Dynamic Content
+
+For pages that load content through scrolling, button clicks, or user interactions:
+
+```javascript
+async function scrapeDynamic() {
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+
+    await page.goto('https://example.com/products');
+
+    // Scroll to trigger lazy loading
+    let previousHeight = 0;
+    for (let i = 0; i < 10; i++) {
+        await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+        await page.waitForTimeout(2000);
+
+        const currentHeight = await page.evaluate('document.body.scrollHeight');
+        if (currentHeight === previousHeight) break; // No new content
+        previousHeight = currentHeight;
+    }
+
+    // Click a "Load More" button if it exists
+    const loadMore = await page.$('button.load-more');
+    if (loadMore) {
+        await loadMore.click();
+        await page.waitForNetworkIdle();
+    }
+
+    // Now extract from the fully loaded page
+    const items = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('.product-card')).map(el => ({
+            name: el.querySelector('.product-name')?.textContent?.trim(),
+            price: el.querySelector('.product-price')?.textContent?.trim(),
+        }));
+    });
+
+    console.log(`Found ${items.length} items after scrolling`);
+
+    await browser.close();
+}
+```
+
+The scroll loop checks whether the page height increased after each scroll. When it stops increasing, there is no more content to load. This is more reliable than scrolling a fixed number of times.
+
+### Waiting for Elements
+
+Puppeteer requires explicit wait statements. This is one of its biggest pain points compared to Playwright. If you try to select an element before it appears in the DOM, you get null or an error.
+
+```javascript
+// Wait for a specific element before extracting
+await page.waitForSelector('.product-list', { timeout: 10000 });
+
+// Wait for navigation after a click
+await Promise.all([
+    page.waitForNavigation(),
+    page.click('a.next-page')
+]);
+
+// Wait for a network request to complete
+await page.waitForResponse(
+    response => response.url().includes('/api/products')
+);
+```
+
+Missing a wait is the most common source of empty results in Puppeteer scripts. If your scraper returns empty arrays or null values, the first thing to check is whether you are waiting for the content to render.
+
+### Taking Screenshots for Debugging
+
+When scraping stops working, screenshots show you what the browser actually sees:
+
+```javascript
+await page.screenshot({ path: 'debug.png', fullPage: true });
+```
+
+This might reveal a CAPTCHA page, a login wall, or a different layout than expected. Always add screenshot debugging to production scrapers.
+
+### Limitations of Puppeteer
+
+Puppeteer is Chromium only. It has experimental Firefox support but no WebKit (Safari) support. For most scraping use cases this is fine because you are targeting Chrome compatible rendering.
+
+Puppeteer requires explicit waits. Missing a `waitForSelector` or `waitForNavigation` causes intermittent empty results that are difficult to debug. Playwright's auto wait eliminates this entire class of bugs.
+
+Resource usage is significant. Each Chromium instance uses 50 to 200MB of RAM. At scale (scraping thousands of pages), you need to manage a pool of browser instances, handle crashes, and implement cleanup logic.
+
+Anti bot detection is not solved by Puppeteer alone. While it runs a real browser, headless mode is detectable through `navigator.webdriver` (set to true), missing browser plugins, and other fingerprinting signals.
+
+## Method 3: Playwright
+
+Playwright is Microsoft's browser automation library, built by several engineers who previously worked on Puppeteer. It supports Chromium, Firefox, and WebKit with full API parity. Playwright has roughly 57.6 million weekly npm downloads, about 5 times more than Puppeteer.
+
+### Install
+
+```bash
+npm install playwright
+```
+
+### Basic Scraping with Auto Wait
+
+```javascript
+const { chromium } = require('playwright');
+
+async function scrape() {
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+
+    await page.goto('https://books.toscrape.com/');
+
+    // Playwright auto-waits for elements to be visible and stable
+    const books = await page.locator('article.product_pod').evaluateAll(els =>
+        els.map(el => ({
+            title: el.querySelector('h3 a').getAttribute('title'),
+            price: el.querySelector('.price_color').textContent.trim(),
+            rating: el.querySelector('.star-rating').classList[1],
+        }))
+    );
+
+    console.log(`Found ${books.length} books`);
+    books.slice(0, 5).forEach(b =>
+        console.log(`${b.title}: ${b.price} (${b.rating})`)
+    );
+
+    await browser.close();
+}
+
+scrape();
+```
+
+Playwright's auto wait is the key advantage over Puppeteer. When you use a locator, Playwright automatically waits for the element to be attached to the DOM, visible, and stable before interacting. This eliminates the `waitForSelector` calls that make Puppeteer scripts verbose and brittle.
+
+### Locators vs Selectors
+
+Playwright's locator API is more resilient than raw CSS selectors:
+
+```javascript
+// Locator-based (recommended)
+const products = page.locator('.product-card');
+const count = await products.count();
+console.log(`Found ${count} products`);
+
+// Get text from the first product
+const firstTitle = await products.first().locator('.title').textContent();
+
+// Filter locators
+const expensiveProducts = products.filter({
+    has: page.locator('.price', { hasText: /\$[5-9]\d/ })
+});
+```
+
+Locators are lazy (they do not query the DOM until you act on them) and auto waiting (they wait for matching elements before acting). This makes scripts more readable and more reliable.
+
+### Multi Browser Support
+
+```javascript
+const { chromium, firefox, webkit } = require('playwright');
+
+// Test your scraper across engines
+for (const browserType of [chromium, firefox, webkit]) {
+    const browser = await browserType.launch();
+    const page = await browser.newPage();
+    await page.goto('https://example.com');
+    console.log(`${browserType.name()}: ${await page.title()}`);
+    await browser.close();
+}
+```
+
+Cross browser testing is useful for scraping because some sites serve different content or protection based on the browser engine.
+
+### Codegen for Quick Scripts
+
+Playwright includes a code generator that records your browser interactions and produces a script:
+
+```bash
+npx playwright codegen https://example.com
+```
+
+This opens a browser. Click, scroll, type, and navigate. Playwright generates the corresponding code. This is the fastest way to prototype a scraper for a new site.
+
+### Puppeteer vs Playwright: Which to Choose
+
+Both work well for scraping. The practical differences:
+
+Playwright has auto wait, which eliminates the most common source of Puppeteer bugs (missing waitForSelector calls). Playwright supports Chromium, Firefox, and WebKit. Puppeteer is Chromium only with experimental Firefox. Playwright has a built in test runner, tracing, and codegen. Puppeteer is lighter (smaller package, less overhead).
+
+For new scraping projects, Playwright is the better default choice. If you already have a working Puppeteer codebase, there is no urgent reason to migrate.
+
+Reader's browser sessions work with both. The CDP WebSocket endpoint is compatible with Playwright's `connectOverCDP` and Puppeteer's `connect({ browserWSEndpoint })`.
+
+## Common Patterns
+
+### Saving Results
+
+```javascript
+const fs = require('fs');
+
+// JSON
+fs.writeFileSync('output.json', JSON.stringify(data, null, 2));
+
+// CSV (simple approach for flat data)
+const header = Object.keys(data[0]).join(',');
+const rows = data.map(item =>
+    Object.values(item).map(v => `"${v}"`).join(',')
+);
+const csv = [header, ...rows].join('\n');
+fs.writeFileSync('output.csv', csv);
+
+// JSON Lines (one object per line, better for large datasets)
+const jsonl = data.map(item => JSON.stringify(item)).join('\n');
+fs.writeFileSync('output.jsonl', jsonl);
+```
+
+JSON Lines is often better than a single JSON array for large datasets because you can process it line by line without loading the entire file into memory.
+
+### Error Handling and Retries
+
+```javascript
+async function scrapeWithRetry(url, maxRetries = 3) {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            const { data } = await axios.get(url, {
+                headers: { 'User-Agent': '...' },
+                timeout: 10000
+            });
+            return data;
+        } catch (error) {
+            if (error.response?.status === 429) {
+                // Rate limited, exponential backoff
+                const wait = Math.pow(2, attempt) * 5000;
+                console.log(`Rate limited. Waiting ${wait}ms...`);
+                await new Promise(r => setTimeout(r, wait));
+                continue;
+            }
+            if (error.response?.status === 403) {
+                console.log(`Blocked on ${url}`);
+                return null;
+            }
+            console.log(`Attempt ${attempt + 1} failed: ${error.message}`);
+            await new Promise(r => setTimeout(r, 2000));
+        }
+    }
+    console.log(`All retries exhausted for ${url}`);
+    return null;
+}
+```
+
+### Concurrent Scraping with Rate Limiting
+
+Node.js handles concurrency naturally through async/await. Limit concurrency to avoid overwhelming the target:
+
+```javascript
+async function scrapeWithConcurrency(urls, concurrency = 5) {
+    const results = [];
+    const queue = [...urls];
+
+    async function worker() {
+        while (queue.length > 0) {
+            const url = queue.shift();
+            const result = await scrapeWithRetry(url);
+            if (result) results.push(result);
+            await new Promise(r => setTimeout(r, 1000));
+        }
+    }
+
+    const workers = Array.from({ length: concurrency }, () => worker());
+    await Promise.all(workers);
+    return results;
+}
+```
+
+This creates N worker functions that pull URLs from a shared queue. Each worker processes one URL at a time with a delay between requests. The `Promise.all` waits for all workers to finish.
+
+## Using Reader
+
+Reader is a cloud web infrastructure platform that handles JavaScript rendering, anti bot bypass, proxy rotation, and content extraction in a single API call. The output is clean markdown optimized for LLM consumption.
+
+### Install
+
+```bash
+npm install @vakra-dev/reader-js
+```
+
+### Scrape a Single Page
+
+```javascript
+const { ReaderClient } = require('@vakra-dev/reader-js');
+
+const reader = new ReaderClient({ apiKey: 'rdr_your_api_key' });
+
+async function scrape() {
+    const result = await reader.read({ url: 'https://example.com/blog/post' });
+
+    if (result.kind === 'scrape') {
+        console.log(result.data.markdown);
+        console.log(`Title: ${result.data.metadata.title}`);
+    }
+}
+
+scrape();
+```
+
+One call. JavaScript rendering, anti bot bypass, proxy rotation, content extraction, and markdown conversion all handled. No browser management, no header configuration, no retry logic.
+
+### Crawl an Entire Site
+
+```javascript
+const result = await reader.read({
+    url: 'https://docs.example.com',
+    maxDepth: 3,
+    maxPages: 100
+});
+
+// Crawls return kind: "job" (async, SDK auto-polls)
+for (const page of result.data) {
+    console.log(`${page.url}: ${page.markdown.length} chars`);
+}
+```
+
+Reader's crawler discovers pages via BFS, stays on the same domain, deduplicates, and converts every page to clean markdown through Supermarkdown.
+
+### Batch Scraping
+
+For scraping multiple specific URLs in parallel:
+
+```javascript
+const result = await reader.read({
+    urls: [
+        'https://example.com/page/1',
+        'https://example.com/page/2',
+        'https://example.com/page/3',
+    ]
+});
+
+for (const page of result.data) {
+    console.log(`${page.url}: ${page.markdown.length} chars`);
+}
+```
+
+Batch requests process up to 1,000 URLs in parallel as an async job.
+
+### Connect a Browser Session
+
+For authenticated workflows and complex interactions, create a Reader browser session and connect with Playwright or Puppeteer:
+
+```javascript
+const { chromium } = require('playwright');
+const { ReaderClient } = require('@vakra-dev/reader-js');
+
+const reader = new ReaderClient({ apiKey: 'rdr_your_api_key' });
+
+async function authenticatedScrape() {
+    // Create a stealth browser session
+    const session = await reader.sessions.create();
+
+    // Connect Playwright to Reader's stealthed browser
+    const browser = await chromium.connectOverCDP(session.wsEndpoint);
+    const page = (await browser.contexts())[0].pages()[0];
+
+    // Your automation logic
+    await page.goto('https://portal.example.com/login');
+    await page.fill('#username', 'user@example.com');
+    await page.fill('#password', 'password');
+    await page.click('button[type="submit"]');
+    await page.waitForURL('**/dashboard');
+
+    const content = await page.content();
+    console.log('Dashboard loaded');
+
+    // Clean up
+    await browser.close();
+    await reader.sessions.stop(session.sessionId);
+}
+```
+
+The browser session includes anti detection features (browser fingerprint generation, identity randomization, and proxy rotation) built in. Your Playwright scripts connect unchanged because Reader exposes a standard CDP endpoint.
+
+### When to Use Each Approach
+
+| Criteria | Axios + Cheerio | Puppeteer | Playwright | Reader |
+|----------|----------------|-----------|------------|--------|
+| JavaScript rendering | No | Yes | Yes | Yes |
+| Anti bot bypass | No | Partial | Partial | Yes |
+| Speed | Fastest | Slow | Slow | Fast (managed) |
+| Memory per page | ~5MB | 50 to 200MB | 50 to 200MB | None (cloud) |
+| Learning curve | Low | Medium | Medium | Low |
+| Output format | Raw HTML | Raw HTML | Raw HTML | Clean markdown |
+| Browser support | N/A | Chromium | Chromium, Firefox, WebKit | Chromium (stealth) |
+| Best for | Static pages | Chrome automation | Cross browser, new projects | Production pipelines |
+
+Use Axios and Cheerio for static HTML pages with no JavaScript rendering or anti bot protection. Use Puppeteer if you already have scripts and need Chromium automation. Use Playwright for new projects that need browser automation. Use Reader when you want production scraping without managing browser infrastructure, proxy rotation, and anti bot bypass.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader). Full documentation is at [docs.reader.dev](https://docs.reader.dev).
+
+## Conclusion
+
+JavaScript web scraping follows a clear progression. Axios and Cheerio for static HTML. Puppeteer or Playwright for JavaScript rendered pages. Reader for managed scraping at scale. Node.js handles concurrent scraping naturally through async/await, and the ecosystem provides mature libraries at every level of complexity.
+
+For new projects, start with Playwright if you need browser automation. Its auto wait, locator API, and multi browser support make it the strongest default choice. Use Reader when you want the infrastructure handled for you and clean markdown output instead of raw HTML.

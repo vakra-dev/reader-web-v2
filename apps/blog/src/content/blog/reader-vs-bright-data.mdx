@@ -1,0 +1,173 @@
+---
+title: "Reader vs Bright Data: Scraping Platform vs Proxy Infrastructure"
+description: "Compare Reader and Bright Data. Unified scraping platform vs enterprise proxy infrastructure. Features, open source, and architecture."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Comparisons"
+keywords: ["bright data alternative", "bright data vs reader", "web scraping cost", "proxy scraping"]
+schemaType: "article"
+faq:
+  - question: "Does Reader have residential proxies?"
+    answer: "Yes. Reader uses tiered proxy pools with datacenter and residential IPs. You can choose standard (datacenter) or premium (residential) proxies based on the target site's protection level. Reader's residential pool is smaller than Bright Data's 400M+ IPs but handles the majority of standard scraping workloads."
+  - question: "Is Bright Data open source?"
+    answer: "No. Bright Data is fully closed source with no self hosting option. All data flows through Bright Data's infrastructure. Reader is open source under Apache 2.0 and can be fully self hosted."
+  - question: "Which is better for enterprise?"
+    answer: "It depends on what \"enterprise\" means for your organization. If you need compliance certifications (SOC 2, GDPR, ISO 27701) from your vendor and the deepest proxy infrastructure, Bright Data is the enterprise choice. If you need self hosting for data sovereignty and Apache 2.0 licensing without vendor lock in, Reader is the enterprise choice. The compliance requirements of your organization determine which path fits."
+  - question: "Can Reader match Bright Data's success rate on hard targets?"
+    answer: "Bright Data's proxy network (400M+ IPs) and specialized products (Web Unlocker) are purpose built for the hardest targets. Reader's Playwright stealth stack handles common anti bot systems but does not match Bright Data's IP diversity for the most aggressively protected sites. For standard scraping workloads, both perform well. For the hardest targets at massive scale, Bright Data has the deeper infrastructure."
+---
+
+Reader and Bright Data operate at different layers of the web scraping stack. Reader is a cloud web infrastructure platform that handles scraping, crawling, and browser automation through a single API. Bright Data is an enterprise data infrastructure provider whose foundation is the largest proxy network in the industry, with scraping tools and pre built datasets layered on top. This comparison covers how each platform works, their proxy infrastructure, browser automation, compliance posture, and where each is the better fit.
+
+## What Bright Data Does
+
+Bright Data is the largest proxy and web data infrastructure provider. The platform is built around a massive proxy network and a suite of products that use that network for different data collection tasks.
+
+### Proxy Network
+
+Bright Data operates over 400 million residential IPs across 195 countries (some third party sources cite the older figure of 72 million, which reflected the network size before recent expansion). The network also includes over 1.3 million ISP IPs, 770,000+ datacenter IPs, and 7 million+ mobile IPs. This is the largest commercial proxy network available.
+
+The residential IPs are ethically sourced through Bright Data's SDK, where users of partner applications opt in to share their IP in exchange for free access to those applications. Bright Data publishes documentation on their ethical sourcing practices and maintains KYC (Know Your Customer) verification on all customers.
+
+### Scraping Products
+
+**Web Unlocker** is a single endpoint that handles anti bot bypass automatically. You send a URL, Web Unlocker selects the optimal proxy type, handles CAPTCHAs, manages sessions, and returns the page content. Bright Data reports a 98%+ success rate across target sites.
+
+**SERP API** provides structured search engine results from 7 engines: Google, Bing, Yandex, Baidu, Yahoo, Naver, and DuckDuckGo. Results come back as structured JSON with organic results, ads, featured snippets, and related searches parsed and separated.
+
+**Web Scraper API** provides pre built scrapers for over 660 dataset endpoints covering e-commerce, social media, real estate, travel, and other verticals.
+
+**Scraping Browser** is a CDP compatible cloud browser with anti bot handling built in. Connect Playwright, Puppeteer, or Selenium and drive a browser through Bright Data's proxy infrastructure.
+
+**Dataset Marketplace** offers 350+ ready made datasets. Instead of scraping data yourself, you purchase pre collected datasets for specific domains (company data, job listings, product catalogs, real estate listings).
+
+### MCP Server
+
+Bright Data has an MCP server with over 60 web access tools and a hosted tier with 5,000 free requests per month. It integrates with Claude, ChatGPT, Cursor, LangChain, LangGraph, LlamaIndex, CrewAI, and n8n.
+
+### Compliance
+
+Bright Data holds SOC 2 (and SOC 3), GDPR, CCPA, and ISO 27701 certifications. They maintain KYC verification on customers and publish compliance documentation. This compliance posture is a significant factor for enterprise procurement teams that require third party audits before approving a vendor.
+
+## What Reader Does
+
+Reader is a cloud web infrastructure platform for AI with an open source core licensed under Apache 2.0. The managed platform is at reader.dev. The entire engine is on GitHub and can be self hosted on your own infrastructure with no feature gaps.
+
+Reader provides three primitives. Scrape takes any URL and returns clean, LLM ready markdown through Supermarkdown, a Rust HTML to markdown engine. Crawl discovers and scrapes pages across entire domains using BFS link discovery with configurable depth and page limits. Browser creates full CDP compatible cloud browser sessions for authenticated workflows and interactive pages.
+
+The stealth stack is built on Playwright with fingerprint-generator for browser fingerprint generation and identity randomization. Proxy infrastructure includes datacenter and residential pools.
+
+Reader's extract capability adds structured JSON output alongside markdown. Pass a schema or natural language description and Reader returns validated JSON. The MCP server exposes 9 tools for AI agent integration. SDKs are available for JavaScript and Python. The managed platform offers 1,000 free pages per month with no credit card required.
+
+## Proxy Infrastructure: Scale vs Simplicity
+
+This is the most significant product difference between the two platforms.
+
+### Bright Data: Deepest IP diversity
+
+Bright Data's proxy network is purpose built for scraping the hardest targets on the web. When a site blocks datacenter IPs, you escalate to residential. When residential gets flagged, you target a specific country or city. When that gets blocked, you move to mobile IPs. Bright Data gives you the full spectrum of IP types across 195 countries with granular geo targeting.
+
+This depth matters for specific use cases. Scraping at massive scale (millions of pages per day) where IP rotation speed and diversity directly affect success rates. Targeting sites with the most aggressive anti bot systems (LinkedIn, Amazon, airline booking sites) where only residential or mobile IPs from specific regions succeed. Geo specific data collection where you need results from a particular country, state, or city.
+
+The tradeoff is complexity. Bright Data has multiple proxy products (Residential, Datacenter, ISP, Mobile), each with separate configuration, authentication, and billing. Choosing the right proxy type, configuring rotation strategies, and managing costs across products requires understanding the proxy landscape.
+
+### Reader: Managed proxy infrastructure
+
+Reader's proxy infrastructure is simpler by design. Datacenter and residential proxy pools with per proxy health tracking mean you do not need to manage proxy selection manually. Per proxy health tracking benches failed proxies for approximately 5 minutes. Auto recycling retires browser instances after 100 requests or 30 minutes. Per proxy concurrency limits (default 2) prevent burning IPs through overuse.
+
+This is sufficient for the majority of scraping workloads. Standard websites, documentation sites, content platforms, e-commerce product pages, and news sites are handled without manual proxy configuration.
+
+The tradeoff is that Reader's proxy pool is significantly smaller than Bright Data's. For the hardest targets that require massive IP diversity, specific geo targeting, or mobile IPs, Bright Data's infrastructure is deeper.
+
+## Browser Automation
+
+Both platforms provide CDP compatible cloud browsers.
+
+**Bright Data's Scraping Browser** connects via Playwright, Puppeteer, or Selenium. The browser routes through Bright Data's proxy network with anti bot handling, CAPTCHA solving, and geo targeting. The browser infrastructure benefits from the full proxy network. Session replay and debugging tools help troubleshoot failing automations.
+
+**Reader's Browser primitive** connects via Playwright or Puppeteer over CDP. The browser runs with Playwright stealth features (fingerprint generation and identity randomization) enabled by default. Sessions persist for up to 60 minutes for multi step workflows. The stealth configuration is automatic rather than configurable.
+
+Both give you a real browser you can drive with existing Playwright or Puppeteer scripts. Bright Data's advantage is the proxy network behind the browser. Reader's advantage is that browser sessions are part of a unified platform alongside scraping and crawling.
+
+## Scraping and Crawling
+
+This is where the product architectures diverge most clearly.
+
+**Bright Data** has multiple scraping products: Web Unlocker (single pages with auto bypass), SERP API (search engines), Web Scraper API (660+ pre built endpoints), and Scraping Browser (manual control). Each product has its own API, documentation, and billing. To crawl a website, you use Web Scraper API endpoints or build crawling logic on top of Web Unlocker or Scraping Browser.
+
+**Reader** has one endpoint that handles scraping, crawling, and extraction. `POST /v1/read` with a single URL returns a scraped page. With `maxDepth` and `maxPages` parameters, the same endpoint crawls. With an `extract` schema, it returns structured JSON. Browser sessions are a separate endpoint for interactive workflows. One API key covers everything.
+
+The practical impact: with Bright Data, you choose and configure the right product for each task. With Reader, you use one endpoint and adjust parameters.
+
+## Structured Data and AI Output
+
+**Bright Data** returns raw HTML by default across most products. The SERP API returns structured JSON for search results. The Web Scraper API returns structured data for its 660+ supported endpoints. The Dataset Marketplace provides pre structured data files.
+
+**Reader** returns clean markdown by default, optimized for LLM consumption. The markdown conversion happens through Supermarkdown, a Rust engine that strips navigation, ads, scripts, and boilerplate while preserving document structure (headings, lists, tables, links). The extract capability adds structured JSON alongside markdown.
+
+For AI and LLM use cases (RAG pipelines, agent context, content analysis), Reader's markdown default means less post processing. For traditional data engineering pipelines that expect structured JSON or CSV, Bright Data's pre built scrapers and datasets provide ready to use structured output.
+
+## Open Source and Self Hosting
+
+**Bright Data** is closed source. There is no self hosting option. All data flows through Bright Data's infrastructure.
+
+**Reader** is fully open source under Apache 2.0. The entire engine (scraping, crawling, browser sessions, stealth stack, Supermarkdown conversion) is on GitHub. Self hosting means data never leaves your network. There are no feature gaps between the open source and managed versions.
+
+For teams with data sovereignty requirements (healthcare, finance, government, defense), Reader's self hosting under Apache 2.0 provides a path that Bright Data cannot. For teams that need compliance certifications from their vendor, Bright Data's SOC 2, GDPR, and ISO 27701 certifications provide the audit trail.
+
+## Compliance and Enterprise
+
+**Bright Data** has the strongest compliance posture in the web scraping industry. SOC 2, GDPR, CCPA, ISO 27701 certifications. KYC on all customers. Ethically sourced proxies with published documentation. This matters for enterprise procurement where vendor audits, compliance questionnaires, and security reviews are part of the buying process.
+
+**Reader** does not currently hold compliance certifications. For enterprise teams that require certified vendors, this is a gap. Reader's alternative for compliance sensitive workloads is self hosting: when the platform runs on your infrastructure, the compliance requirements shift from the vendor to your own controls.
+
+## Pre Built Datasets
+
+Bright Data offers 350+ pre built datasets through its Dataset Marketplace. Instead of building and running scrapers, you purchase pre collected data for specific domains: company profiles, job listings, product catalogs, real estate listings, social media data, and more. Datasets are updated on configurable schedules.
+
+Reader does not have a dataset marketplace. Reader is a scraping and crawling platform, not a data provider. You build the collection pipeline and Reader provides the infrastructure.
+
+For teams that need data without building pipelines, Bright Data's datasets are a faster path. For teams that need custom collection from specific sources with specific configurations, Reader's API provides the flexibility.
+
+## When to Pick Each Tool
+
+### Choose Bright Data if:
+
+You scrape the hardest targets at massive scale and need the deepest proxy diversity (400M+ residential IPs across 195 countries). You require enterprise compliance certifications (SOC 2, GDPR, ISO 27701) from your vendor. You want pre built datasets without building scraping pipelines. You need a dedicated SERP API for structured search engine data. You operate at a scale where proxy diversity directly affects success rates.
+
+### Choose Reader if:
+
+You want one unified API for scraping, crawling, and browser sessions without managing multiple products. You need Apache 2.0 open source licensing with full self hosting capability. You want clean markdown output by default for LLM and RAG pipelines. You prefer transparent per page credits over per product billing. You need self hosting for data sovereignty requirements where data cannot flow through a third party.
+
+## Getting Started with Reader
+
+```python
+from reader_py import ReaderClient
+
+reader = ReaderClient(api_key="rdr_your_api_key")
+
+# Scrape any URL to clean markdown
+result = reader.read(url="https://example.com")
+print(result.data.markdown)
+
+# Crawl an entire site
+result = reader.read(
+    url="https://docs.example.com",
+    max_depth=3,
+    max_pages=100
+)
+for page in result.data:
+    print(f"{page.url}: {len(page.markdown)} chars")
+
+# Create a browser session
+session = reader.sessions.create()
+# Connect with Playwright: chromium.connect_over_cdp(session.ws_endpoint)
+```
+
+Reader offers 1,000 free pages per month at [reader.dev](https://reader.dev) with no credit card required. Full documentation is at [docs.reader.dev](https://docs.reader.dev). Source code is on [GitHub](https://github.com/vakra-dev/reader).
+
+## Conclusion
+
+Bright Data and Reader serve different segments of the web scraping market. Bright Data provides the deepest proxy infrastructure, broadest product suite, and strongest compliance posture for enterprise teams that scrape the hardest targets at the largest scale. Reader provides a simpler, developer first platform with one unified API, clean markdown output, and full open source self hosting under Apache 2.0.
+
+The choice depends on three factors. Scale: if you need 400M+ IPs and geo targeting across 195 countries, Bright Data is the infrastructure to support that. Simplicity: if you want one API, one credit model, and markdown output without managing multiple products, Reader provides that. Control: if you need self hosting for data sovereignty or Apache 2.0 licensing for commercial integration, Reader is the option that supports both.

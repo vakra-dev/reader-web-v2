@@ -203,7 +203,7 @@ curl -X POST https://api.reader.dev/v1/read \
   -d '{"url": "https://example.com"}'
 ```
 
-Reader handles proper headers, TLS fingerprinting, proxy rotation with automatic escalation from datacenter to residential, JavaScript rendering when needed, and anti-detection in browser sessions. One API call replaces the entire diagnostic and fix workflow described in this guide. The output is clean markdown rather than raw HTML, which is useful if you are feeding content into LLM pipelines.
+Reader handles proper headers, TLS fingerprinting, proxy rotation with datacenter and residential pools, JavaScript rendering when needed, and anti-detection in browser sessions. One API call replaces the entire diagnostic and fix workflow described in this guide. The output is clean markdown rather than raw HTML, which is useful if you are feeding content into LLM pipelines.
 
 Reader offers 1,000 free pages per month at [reader.dev](https://reader.dev) with no credit card required. The entire platform is open source under Apache 2.0 and can be self-hosted if you want to run the anti-bot infrastructure on your own servers.
 

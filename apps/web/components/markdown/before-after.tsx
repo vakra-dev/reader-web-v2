@@ -73,7 +73,7 @@ export function BeforeAfter() {
           transition={{ duration: 0.5 }}
           className="grid md:grid-cols-2 gap-4 max-w-5xl mx-auto"
         >
-          {/* Raw HTML — the problem */}
+          {/* Raw HTML - the problem */}
           <div className="border border-edge rounded-md overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-2.5 border-b border-edge bg-red-50">
               <div className="flex gap-1.5">
@@ -92,7 +92,7 @@ export function BeforeAfter() {
             </div>
           </div>
 
-          {/* Clean markdown — the solution */}
+          {/* Clean markdown - the solution */}
           <div className="border border-edge rounded-md overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-2.5 border-b border-edge bg-accent-50">
               <div className="flex gap-1.5">

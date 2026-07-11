@@ -1,0 +1,610 @@
+---
+title: "Web Scraping in Java: Complete Tutorial (2026)"
+description: "Learn web scraping in Java with Jsoup, Selenium WebDriver, and HtmlUnit. From HTML parsing to browser automation and managed scraping with Reader."
+date: 2026-07-09
+author: "Nihal Kaul"
+category: "Guides"
+keywords: ["web scraping java", "java web scraper", "jsoup scraping", "selenium java"]
+schemaType: "howto"
+faq:
+  - question: "Is Java good for web scraping?"
+    answer: "Java is a strong choice for web scraping, especially in enterprise environments. Jsoup is fast, well designed, and handles malformed HTML gracefully. Selenium's Java bindings are the most mature of any language. The JVM's threading model handles concurrent scraping efficiently. The main disadvantage compared to Python is that the scraping ecosystem has fewer tutorials and community resources."
+  - question: "What is the best Java scraping library?"
+    answer: "Jsoup for static HTML parsing. It is fast, well documented, and its CSS selector API is clean and familiar. For JavaScript rendered pages, Selenium WebDriver with Chrome is the most reliable option. HtmlUnit is a lightweight middle ground for pages with simple JavaScript."
+  - question: "Can Jsoup handle JavaScript?"
+    answer: "No. Jsoup is a static HTML parser. It parses the initial HTTP response without executing JavaScript. For pages that load content dynamically through JavaScript, use Selenium, HtmlUnit, or a managed scraping API like Reader that handles rendering for you."
+  - question: "How do I handle anti bot protection in Java?"
+    answer: "Set a real Chrome User Agent, send complete headers (Accept, Accept Language, Accept Encoding), use sessions to maintain cookies, and add delays between requests. For sites with Cloudflare or similar protection, you need Selenium with a real browser or a managed scraping API like Reader that handles proxy rotation automatically."
+---
+
+Java is a strong choice for web scraping in enterprise environments where the existing codebase, team skills, and deployment infrastructure are already Java based. The language has mature libraries for HTML parsing, browser automation, and HTTP handling. The JVM's threading model handles concurrent scraping efficiently, and Java's strong type system catches data extraction errors at compile time.
+
+This guide covers three approaches: Jsoup for HTML parsing, Selenium WebDriver for full browser automation, and HtmlUnit for lightweight JavaScript rendering without a visible browser. It also shows how to integrate with Reader's API for managed scraping where infrastructure is handled for you.
+
+## Prerequisites
+
+Java 17 or newer and Maven or Gradle. All examples use Maven. Create a new project:
+
+```bash
+mvn archetype:generate -DgroupId=com.example.scraper \
+    -DartifactId=scraper -DarchetypeArtifactId=maven-archetype-quickstart \
+    -DinteractiveMode=false
+cd scraper
+```
+
+## Method 1: Jsoup
+
+Jsoup is Java's most popular HTML parser. It combines HTTP fetching, HTML parsing, and DOM traversal in a single library with a clean, fluent API. Jsoup has been the standard Java scraping library for over a decade and handles malformed HTML gracefully.
+
+### Install
+
+Add to your `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>org.jsoup</groupId>
+    <artifactId>jsoup</artifactId>
+    <version>1.18.1</version>
+</dependency>
+```
+
+### Fetch and Parse a Page
+
+```java
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+public class BookScraper {
+    public static void main(String[] args) throws Exception {
+        Document doc = Jsoup.connect("https://books.toscrape.com/")
+                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                        "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                        "Chrome/126.0.0.0 Safari/537.36")
+                .header("Accept", "text/html,application/xhtml+xml," +
+                        "application/xml;q=0.9,*/*;q=0.8")
+                .header("Accept-Language", "en-US,en;q=0.9")
+                .timeout(10000)
+                .get();
+
+        Elements books = doc.select("article.product_pod");
+        System.out.printf("Found %d books%n", books.size());
+
+        for (Element book : books) {
+            String title = book.select("h3 a").attr("title");
+            String price = book.select(".price_color").text();
+            String rating = book.select(".star-rating").attr("class")
+                    .replace("star-rating ", "");
+
+            System.out.printf("%s: %s (%s)%n", title, price, rating);
+        }
+    }
+}
+```
+
+Output:
+```
+Found 20 books
+A Light in the Attic: £51.77 (Three)
+Tipping the Velvet: £53.74 (One)
+Soumission: £50.10 (One)
+Sharp Objects: £47.82 (Four)
+Sapiens: A Brief History of Humankind: £54.23 (Five)
+```
+
+Jsoup's `connect()` method handles HTTP requesting with configurable headers, timeouts, cookies, proxy settings, and redirects. The `select()` method uses CSS selectors identical to what you would write in JavaScript's `querySelectorAll`. This makes porting scraping logic between Java and JavaScript straightforward.
+
+### Extracting Structured Data
+
+Define a class for your extracted data and populate it:
+
+```java
+import java.util.ArrayList;
+import java.util.List;
+
+class Book {
+    String title;
+    String price;
+    String rating;
+    String url;
+    boolean inStock;
+
+    Book(String title, String price, String rating, String url, boolean inStock) {
+        this.title = title;
+        this.price = price;
+        this.rating = rating;
+        this.url = url;
+        this.inStock = inStock;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("%s: %s (%s) %s",
+                title, price, rating, inStock ? "In Stock" : "Out of Stock");
+    }
+}
+
+public class StructuredScraper {
+    public static List<Book> extractBooks(Document doc, String baseUrl) {
+        List<Book> books = new ArrayList<>();
+
+        for (Element el : doc.select("article.product_pod")) {
+            String title = el.select("h3 a").attr("title");
+            String price = el.select(".price_color").text().trim();
+            String rating = el.select(".star-rating").attr("class")
+                    .replace("star-rating ", "");
+            String relativeUrl = el.select("h3 a").attr("href");
+            String fullUrl = baseUrl + relativeUrl;
+            boolean inStock = !el.select(".instock").isEmpty();
+
+            books.add(new Book(title, price, rating, fullUrl, inStock));
+        }
+
+        return books;
+    }
+}
+```
+
+Java's type safety means the compiler catches missing fields and type mismatches before runtime. In Python or JavaScript, a typo in a field name creates a silent bug. In Java, it creates a compile error.
+
+### Handling Pagination
+
+Follow next page links and collect data across all pages:
+
+```java
+public static List<Book> scrapeAllPages(String startUrl) throws Exception {
+    List<Book> allBooks = new ArrayList<>();
+    String url = startUrl;
+
+    while (url != null) {
+        Document doc = Jsoup.connect(url)
+                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...")
+                .timeout(10000)
+                .get();
+
+        List<Book> pageBooks = extractBooks(doc,
+                "https://books.toscrape.com/catalogue/");
+        allBooks.addAll(pageBooks);
+
+        // Find next page link
+        Element nextLink = doc.select("li.next a").first();
+        if (nextLink != null) {
+            String href = nextLink.attr("href");
+            // Resolve relative URL
+            url = new java.net.URI(url).resolve(href).toString();
+        } else {
+            url = null;
+        }
+
+        System.out.printf("Scraped page, total: %d books%n", allBooks.size());
+
+        // Rate limiting
+        Thread.sleep(1000);
+    }
+
+    return allBooks;
+}
+```
+
+Use `java.net.URI.resolve()` for URL resolution. Building URLs manually with string concatenation breaks on relative paths, query parameters, and edge cases.
+
+### Using Sessions and Cookies
+
+Some sites require loading a homepage first to set cookies before allowing access to inner pages. Jsoup handles this through `Connection.Response`:
+
+```java
+import org.jsoup.Connection;
+import java.util.Map;
+
+// First request: load homepage and capture cookies
+Connection.Response loginPage = Jsoup.connect("https://example.com/")
+        .method(Connection.Method.GET)
+        .execute();
+
+Map<String, String> cookies = loginPage.cookies();
+
+// Subsequent requests include those cookies
+Document doc = Jsoup.connect("https://example.com/protected-page")
+        .cookies(cookies)
+        .userAgent("Mozilla/5.0 ...")
+        .get();
+```
+
+For login flows with CSRF tokens:
+
+```java
+// Get the login page and extract the CSRF token
+Connection.Response loginPage = Jsoup.connect("https://example.com/login")
+        .method(Connection.Method.GET)
+        .execute();
+
+Document loginDoc = loginPage.parse();
+String csrfToken = loginDoc.select("input[name=_token]").attr("value");
+Map<String, String> cookies = loginPage.cookies();
+
+// Submit login form with credentials and CSRF token
+Connection.Response loginResponse = Jsoup.connect("https://example.com/login")
+        .cookies(cookies)
+        .data("username", "user@example.com")
+        .data("password", "password")
+        .data("_token", csrfToken)
+        .method(Connection.Method.POST)
+        .execute();
+
+// Use the authenticated cookies for subsequent requests
+Map<String, String> authCookies = loginResponse.cookies();
+```
+
+### Saving Results
+
+```java
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import java.io.FileWriter;
+import java.io.PrintWriter;
+
+// JSON (using Gson)
+public static void saveJson(List<Book> books, String filename) throws Exception {
+    Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    try (FileWriter writer = new FileWriter(filename)) {
+        gson.toJson(books, writer);
+    }
+}
+
+// CSV
+public static void saveCsv(List<Book> books, String filename) throws Exception {
+    try (PrintWriter writer = new PrintWriter(new FileWriter(filename))) {
+        writer.println("title,price,rating,url,in_stock");
+        for (Book book : books) {
+            writer.printf("\"%s\",\"%s\",\"%s\",\"%s\",%b%n",
+                    book.title.replace("\"", "\"\""),
+                    book.price,
+                    book.rating,
+                    book.url,
+                    book.inStock);
+        }
+    }
+}
+```
+
+Add Gson to your pom.xml:
+
+```xml
+<dependency>
+    <groupId>com.google.code.gson</groupId>
+    <artifactId>gson</artifactId>
+    <version>2.11.0</version>
+</dependency>
+```
+
+### Limitations of Jsoup
+
+Jsoup is a static HTML parser. It fetches the initial HTTP response and parses the HTML it receives. It does not execute JavaScript, render dynamic content, or run a browser.
+
+If the page uses React, Vue, Next.js, Angular, or any JavaScript framework to load content dynamically, Jsoup sees the empty shell before JavaScript executes. The actual product data, search results, or article content is not in the HTML that Jsoup receives.
+
+Jsoup also does not handle anti bot protection that requires JavaScript execution (Cloudflare challenges, DataDome captchas, Akamai verification). Java's HTTP client produces a non browser TLS fingerprint that anti bot systems detect regardless of User Agent headers.
+
+For static HTML sites with light or no protection, Jsoup is fast, reliable, and the right tool. For JavaScript rendered sites, you need a browser.
+
+## Method 2: Selenium WebDriver
+
+Selenium is the oldest and most established browser automation framework across any language. The Java bindings are particularly mature, with strong IDE support and extensive documentation. Selenium launches a real browser (Chrome, Firefox, Edge, Safari), renders JavaScript fully, and gives you complete control through the WebDriver protocol.
+
+### Install
+
+Add to `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>org.seleniumhq.selenium</groupId>
+    <artifactId>selenium-java</artifactId>
+    <version>4.25.0</version>
+</dependency>
+```
+
+Chrome or Firefox must be installed on the system. Selenium 4.6+ includes Selenium Manager, which downloads the appropriate browser driver automatically.
+
+### Basic Scraping
+
+```java
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+
+import java.util.List;
+
+public class SeleniumScraper {
+    public static void main(String[] args) {
+        ChromeOptions options = new ChromeOptions();
+        options.addArguments("--headless=new");
+        options.addArguments("--disable-gpu");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--window-size=1920,1080");
+        options.addArguments("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                "Chrome/126.0.0.0 Safari/537.36");
+
+        WebDriver driver = new ChromeDriver(options);
+
+        try {
+            driver.get("https://books.toscrape.com/");
+
+            List<WebElement> books = driver.findElements(
+                    By.cssSelector("article.product_pod"));
+
+            System.out.printf("Found %d books%n", books.size());
+
+            for (WebElement book : books) {
+                String title = book.findElement(By.cssSelector("h3 a"))
+                        .getAttribute("title");
+                String price = book.findElement(By.cssSelector(".price_color"))
+                        .getText();
+                System.out.printf("%s: %s%n", title, price);
+            }
+        } finally {
+            driver.quit();
+        }
+    }
+}
+```
+
+Always wrap Selenium code in a try/finally block that calls `driver.quit()`. Without this, browser processes leak and accumulate, eventually exhausting system resources.
+
+The `--headless=new` flag runs Chrome in the new headless mode (Chrome 112+), which is harder for anti bot systems to detect than the old `--headless` mode.
+
+### Waiting for Dynamic Content
+
+Selenium requires explicit waits for dynamic content. Without waits, you get stale elements, empty lists, or NoSuchElementException errors.
+
+```java
+import org.openqa.selenium.support.ui.WebDriverWait;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import java.time.Duration;
+
+WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+
+// Wait for an element to be visible
+WebElement element = wait.until(
+        ExpectedConditions.visibilityOfElementLocated(
+                By.cssSelector(".product-list")));
+
+// Wait for elements to be present (not necessarily visible)
+List<WebElement> items = wait.until(
+        ExpectedConditions.presenceOfAllElementsLocatedBy(
+                By.cssSelector(".product-card")));
+
+// Wait for a specific condition
+wait.until(ExpectedConditions.numberOfElementsToBeMoreThan(
+        By.cssSelector(".product-card"), 10));
+```
+
+### Handling Interactions
+
+For pages that require scrolling, clicking, or form filling:
+
+```java
+import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.Keys;
+
+JavascriptExecutor js = (JavascriptExecutor) driver;
+
+// Scroll to bottom to trigger lazy loading
+for (int i = 0; i < 5; i++) {
+    js.executeScript("window.scrollTo(0, document.body.scrollHeight)");
+    Thread.sleep(2000);
+}
+
+// Click a button
+WebElement loadMore = driver.findElement(By.cssSelector("button.load-more"));
+loadMore.click();
+
+// Fill a form
+WebElement searchBox = driver.findElement(By.id("search"));
+searchBox.sendKeys("web scraping");
+searchBox.sendKeys(Keys.ENTER);
+
+// Wait for results
+wait.until(ExpectedConditions.visibilityOfElementLocated(
+        By.cssSelector(".search-results")));
+```
+
+### Taking Screenshots
+
+```java
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+Files.copy(screenshot.toPath(), Path.of("debug.png"));
+```
+
+### Limitations of Selenium
+
+Selenium is mature and well supported but heavy. Each browser instance uses significant memory (200MB+). Starting a browser takes 2 to 5 seconds. The WebDriver protocol adds latency to every operation.
+
+For scraping specifically, Selenium is often overkill. Jsoup is 10 to 100 times faster for static pages. Selenium's strength is in scenarios that genuinely require browser interaction: filling multi step forms, navigating authenticated dashboards, handling CAPTCHA flows.
+
+Selenium also does not fully solve anti bot detection. While it runs a real browser, the `navigator.webdriver` property is set to true by default, and other browser fingerprinting signals can be detected.
+
+## Method 3: HtmlUnit
+
+HtmlUnit is a GUI less Java browser. It simulates browser behavior including limited JavaScript execution without launching a visible browser window. It sits between Jsoup (no JavaScript) and Selenium (full browser).
+
+### Install
+
+Add to `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>org.htmlunit</groupId>
+    <artifactId>htmlunit</artifactId>
+    <version>4.5.0</version>
+</dependency>
+```
+
+### Basic Usage
+
+```java
+import org.htmlunit.WebClient;
+import org.htmlunit.html.HtmlPage;
+import org.htmlunit.html.HtmlElement;
+
+import java.util.List;
+
+public class HtmlUnitScraper {
+    public static void main(String[] args) throws Exception {
+        try (WebClient client = new WebClient()) {
+            // Suppress JavaScript errors and CSS warnings
+            client.getOptions().setCssEnabled(false);
+            client.getOptions().setJavaScriptEnabled(true);
+            client.getOptions().setThrowExceptionOnScriptError(false);
+            client.getOptions().setThrowExceptionOnFailingStatusCode(false);
+            client.getOptions().setPrintContentOnFailingStatusCode(false);
+
+            HtmlPage page = client.getPage("https://books.toscrape.com/");
+
+            // Wait for JavaScript to complete
+            client.waitForBackgroundJavaScript(5000);
+
+            List<HtmlElement> books = page.getByXPath(
+                    "//article[contains(@class,'product_pod')]");
+
+            System.out.printf("Found %d books%n", books.size());
+
+            for (HtmlElement book : books) {
+                HtmlElement link = book.getFirstByXPath(".//h3/a");
+                HtmlElement price = book.getFirstByXPath(
+                        ".//p[contains(@class,'price_color')]");
+
+                System.out.printf("%s: %s%n",
+                        link.getAttribute("title"),
+                        price.getTextContent().trim());
+            }
+        }
+    }
+}
+```
+
+HtmlUnit uses XPath for element queries, which is more verbose than CSS selectors but can express complex conditions that CSS cannot.
+
+### When to Use HtmlUnit
+
+HtmlUnit sits in a specific niche. Use it when:
+
+The page requires some JavaScript execution (loading additional data, executing inline scripts) but does not use a modern JavaScript framework. HtmlUnit's JavaScript engine (Rhino based) handles simple scripts but struggles with React, Angular, and Vue.
+
+You need something lighter than Selenium but more capable than Jsoup. HtmlUnit does not launch a real browser process, so it uses less memory and starts faster than Selenium.
+
+You are in a server environment where installing Chrome is impractical. HtmlUnit is a pure Java dependency with no external browser required.
+
+### Limitations of HtmlUnit
+
+HtmlUnit's JavaScript engine is less complete than Chrome's V8. Modern single page applications built with React, Angular, or Vue may not render correctly. Error handling for JavaScript failures requires suppressing exceptions, which can mask real issues.
+
+For complex, modern websites, Selenium with Chrome is the reliable choice. HtmlUnit works for older sites, server rendered pages with light JavaScript, and environments where browser installation is not possible.
+
+## Using Reader from Java
+
+Reader does not have an official Java SDK. You integrate through the REST API using Java's built in HTTP client (java.net.http, available since Java 11).
+
+```java
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class ReaderScraper {
+    private static final String API_URL = "https://api.reader.dev/v1/read";
+    private static final String API_KEY = "rdr_your_api_key";
+
+    public static String scrape(String targetUrl) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+
+        String json = String.format("{\"url\": \"%s\"}", targetUrl);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(API_URL))
+                .header("Content-Type", "application/json")
+                .header("x-api-key", API_KEY)
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+
+        HttpResponse<String> response = client.send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            throw new RuntimeException(
+                    "Reader API error: " + response.statusCode());
+        }
+
+        return response.body();
+    }
+
+    public static void main(String[] args) throws Exception {
+        String result = scrape("https://example.com");
+        System.out.println(result);
+    }
+}
+```
+
+### Parsing the Response
+
+Use Gson to parse Reader's JSON response:
+
+```java
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
+String responseBody = scrape("https://example.com");
+JsonObject json = JsonParser.parseString(responseBody).getAsJsonObject();
+
+JsonObject data = json.getAsJsonObject("data");
+String markdown = data.get("markdown").getAsString();
+String title = data.getAsJsonObject("metadata").get("title").getAsString();
+
+System.out.printf("Title: %s%n", title);
+System.out.printf("Markdown length: %d chars%n", markdown.length());
+System.out.println(markdown.substring(0, Math.min(500, markdown.length())));
+```
+
+### Crawling with Reader
+
+For crawling, add maxDepth and maxPages to the request:
+
+```java
+String json = String.format(
+        "{\"url\": \"%s\", \"maxDepth\": %d, \"maxPages\": %d}",
+        "https://docs.example.com", 3, 100);
+```
+
+Crawl requests return an async job. Poll the job status endpoint until the crawl completes.
+
+Reader handles JavaScript rendering, anti bot bypass, proxy rotation, and markdown conversion in a single HTTP call. For Java teams that need production scraping without managing Selenium browser pools, proxy infrastructure, and anti bot handling, Reader provides managed infrastructure through a simple REST API.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## When to Use Each Approach
+
+| Criteria | Jsoup | Selenium | HtmlUnit | Reader |
+|----------|-------|----------|----------|--------|
+| JavaScript rendering | No | Full | Partial | Full |
+| Anti bot bypass | No | Partial | No | Yes |
+| Speed | Fastest | Slowest | Medium | Fast (managed) |
+| Memory per page | ~5MB | 200MB+ | ~50MB | None (cloud) |
+| External browser needed | No | Yes | No | No |
+| Learning curve | Low | Medium | Low | Low |
+| Output format | Parsed DOM | Rendered DOM | Parsed DOM | Clean markdown |
+| Best for | Static HTML | Browser automation | Simple JS pages | Production pipelines |
+
+## Conclusion
+
+Java web scraping has three tiers. Jsoup for fast, reliable static HTML parsing with a fluent API. Selenium WebDriver for full browser automation when JavaScript rendering and interactions are required. HtmlUnit for lightweight JavaScript support without installing a browser. Reader's API for managed scraping where you want production infrastructure without the operational overhead.
+
+For enterprise Java teams, the choice often depends on what the target site requires. Static pages with known structure: Jsoup. JavaScript heavy pages that need real browser rendering: Selenium. Managed infrastructure with clean markdown output: Reader.

@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 
 const stats = [
   { value: "<5ms", label: "per page" },
-  { value: "10–50x", label: "faster than JS alternatives" },
+  { value: "10 to 50x", label: "faster than JS alternatives" },
   { value: "O(n)", label: "single-pass conversion" },
 ];
 

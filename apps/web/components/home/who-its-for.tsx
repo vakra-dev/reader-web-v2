@@ -9,7 +9,7 @@ const personas = [
     title: "For developers building AI apps",
     body: "Your agents need live web data, not stale training sets. Reader gives you clean markdown and browser sessions from any URL. One API key, one credit pool, four primitives.",
     detail:
-      "Plug Reader into your RAG pipelines, agent workflows, or any LLM-powered app. Connect with Playwright or Puppeteer for browser automation. SDKs for JavaScript and Python. Self-host the open-source core or use the managed platform.",
+      "Plug Reader into your RAG pipelines, agent workflows, or any LLM-powered app. Connect with Playwright or Puppeteer for browser automation. SDKs for JavaScript and Python. Self-host the open source core or use the managed platform.",
     quote: "Stop writing scrapers. Start shipping features.",
     color: "text-emerald-500",
   },
@@ -18,7 +18,7 @@ const personas = [
     title: "For enterprise teams automating workflows",
     body: "Insurance quoting, vendor portal monitoring, competitive intelligence, compliance checks. Reader handles the browser automation so your team doesn't build scraping infrastructure from scratch.",
     detail:
-      "Authenticated sessions persist across runs. Stealth proxies and anti-bot bypass included. Schedule jobs, monitor changes, export structured data to your existing tools.",
+      "Authenticated sessions persist across runs. Proxy rotation and anti-bot bypass included. Schedule jobs, monitor changes, export structured data to your existing tools.",
     quote: "Automate what your team does manually on the web, at scale.",
     color: "text-blue-500",
   },

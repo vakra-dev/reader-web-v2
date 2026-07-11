@@ -45,7 +45,7 @@ Reader is a cloud web infrastructure platform for AI, available at reader.dev. T
 
 Reader provides three primitives. Scrape takes any URL and returns clean, LLM ready markdown through Supermarkdown, a Rust HTML to markdown engine. Crawl discovers and extracts content across entire domains using BFS link discovery with configurable depth and page limits. Browser creates cloud browser sessions with full CDP compatibility.
 
-When you create a browser session through Reader's cloud platform, you get back a CDP WebSocket endpoint. Your existing Playwright or Puppeteer scripts connect directly without modification. The browser sessions include stealth features built on Ulixee Hero: TLS fingerprinting, DNS over TLS, WebRTC IP masking, canvas and WebGL randomization, and navigator.webdriver spoofing. Tiered proxy pools (datacenter and residential) with automatic escalation handle IP reputation.
+When you create a browser session through Reader's cloud platform, you get back a CDP WebSocket endpoint. Your existing Playwright or Puppeteer scripts connect directly without modification. The browser sessions include stealth features built on Playwright with fingerprint-generator: browser fingerprint generation, identity randomization, and proxy rotation. Datacenter and residential proxy pools handle IP reputation.
 
 Reader also includes an MCP server (`@vakra-dev/reader-mcp`) with nine tools: scrape, batch scrape, crawl, discover, extract, browser session creation, job status, job cancellation, and credit checking. The managed platform offers 1,000 free pages per month with no credit card required.
 

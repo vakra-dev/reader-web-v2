@@ -38,7 +38,7 @@ export function Hero() {
           transition={{ duration: 0.5, delay: 0.1 }}
           className="text-4xl md:text-6xl lg:text-7xl font-extrabold mb-6 text-fg"
         >
-          Access the web
+          Read the web
           <br />
           without the complexity
         </motion.h1>

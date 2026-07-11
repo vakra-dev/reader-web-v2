@@ -1,0 +1,141 @@
+---
+title: "Reader vs Apify: Unified API vs Actor Marketplace"
+description: "Compare Reader and Apify. Unified scraping API vs pre-built Actor marketplace. Features, open source licensing, and developer experience."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Comparisons"
+keywords: ["apify alternative", "apify vs reader", "open source scraping", "web scraping platform"]
+schemaType: "article"
+faq:
+  - question: "Can I use Apify Actors with Reader?"
+    answer: "No. Actors are specific to Apify's platform and run on Apify's infrastructure. Reader and Apify are separate platforms with different APIs. You can use both for different parts of your workflow if needed."
+  - question: "Is Crawlee a Reader alternative?"
+    answer: "Crawlee is a crawling framework, not a managed platform. It handles request scheduling and proxy rotation but you host and operate the infrastructure yourself. Reader provides both a managed cloud platform and a self hostable open source engine. If you want a framework to build on, Crawlee is a strong option. If you want managed infrastructure with clean markdown output, Reader is the fit."
+  - question: "Which handles anti bot better?"
+    answer: "Both handle anti bot protection but through different mechanisms. Apify Actors for specific sites may have site specific anti bot solutions. Reader uses Playwright with fingerprint-generator (browser fingerprint generation, identity randomization, and proxy rotation) as a general purpose solution across all URLs. Neither publishes independent success rate benchmarks."
+  - question: "Which is better for AI applications?"
+    answer: "Reader is built for AI use cases. Clean markdown is the default output (67 to 87 percent fewer tokens than HTML). The MCP server exposes 9 tools for AI agents. The extract capability produces structured JSON from any page. Apify has AI integrations (LangChain loader, MCP) but its core platform was built for general purpose automation before AI workflows became the primary use case."
+---
+
+Reader and Apify take fundamentally different approaches to web scraping. Reader provides a unified API where one endpoint handles any URL. Apify provides a marketplace of pre built scrapers (called Actors) where each Actor is optimized for a specific site or task. This comparison covers how each platform works, their open source strategies, crawling capabilities, and where each is the better fit.
+
+## What Apify Does
+
+Apify is a web scraping and automation platform built around its Actor marketplace. An Actor is a pre built scraper or automation script that runs on Apify's cloud infrastructure. The marketplace has tens of thousands of Actors covering specific sites (Amazon, Google Maps, Instagram, LinkedIn, TripAdvisor) and specific tasks (email extraction, lead generation, SEO auditing).
+
+To scrape Amazon product data on Apify, you find the Amazon Product Scraper Actor, configure its inputs (search terms, category URLs, number of pages), run it, and download the structured output. Someone else built and maintains the scraper. You just use it.
+
+Apify also develops Crawlee, an open source crawling library licensed under Apache 2.0 with over 24,000 GitHub stars. Crawlee is a TypeScript framework with built in request queuing, proxy rotation, session management, and automatic scaling. It powers many Actors in the marketplace and can be used independently outside of Apify's platform.
+
+The platform includes scheduling (run Actors on a cron), storage (key value store, dataset, and request queue), monitoring (run history, error logs, resource usage), and integrations with Zapier, Make, n8n, LangChain, and Google Sheets. Apify also has an MCP server for AI agent integration.
+
+Apify's pricing is based on Compute Units (CU), where 1 CU equals 1 GB of RAM used for 1 hour. The CU rate varies by plan: $0.20 on the Free and Starter ($29/month) plans, $0.16 on Scale ($199/month), and $0.13 on Business ($999/month). Individual Actors in the marketplace can add their own charges on top (pay per result, pay per event, or rental fees).
+
+## What Reader Does
+
+Reader is a cloud web infrastructure platform with an open source core licensed under Apache 2.0. Rather than a marketplace of site specific scrapers, Reader provides a unified API where one endpoint handles any URL.
+
+Three primitives cover the full surface of web interaction. Scrape takes any URL and returns clean, LLM ready markdown. Crawl discovers and scrapes pages across entire domains using BFS link discovery with depth and page limits. Browser creates full CDP compatible cloud browser sessions for authenticated workflows and interactive pages.
+
+Reader's scraping engine is built on Playwright with fingerprint-generator for stealth (browser fingerprint generation and identity randomization) and uses Supermarkdown, a Rust HTML to markdown engine, for content conversion. The output is clean markdown by default, optimized for LLM consumption.
+
+The extract capability adds structured JSON output alongside markdown. Pass a schema or plain English description and Reader returns validated JSON with the extracted fields. Missing fields return null rather than hallucinated values.
+
+Reader's MCP server exposes 9 tools for AI agent integration. SDKs are available for JavaScript and Python. The managed platform offers 1,000 free pages per month with no credit card required. The entire engine is open source under Apache 2.0 and can be self hosted with no feature gaps.
+
+## Marketplace vs Unified API
+
+This is the core architectural difference between the two platforms.
+
+### When the marketplace wins
+
+Apify's Actor marketplace excels when you need data from a specific, well known site and someone has already solved the site specific challenges. An Amazon Actor knows which selectors to use, how to handle pagination, how to deal with Amazon's anti bot system, and what output format to produce. You configure inputs, run it, and get structured data without writing any scraping code.
+
+The marketplace also handles maintenance. When Amazon changes its page structure, the Actor maintainer updates the selectors. You get the fix without changing anything on your end. For popular sites with actively maintained Actors, this is a genuine advantage.
+
+Apify's Actor quality varies because anyone can publish an Actor. Popular Actors for major sites (Amazon, Google Maps, Instagram) are well maintained. Niche Actors for smaller sites may be abandoned, buggy, or outdated. Evaluating Actor quality before relying on it is part of the workflow.
+
+### When the unified API wins
+
+Reader's unified API excels when you scrape many different sites and want consistency. One endpoint, one authentication method, one response format, one credit model. There is no Actor selection, no per site configuration, and no dependency on third party maintainers.
+
+For use cases where the target sites are diverse or changing (competitive intelligence across dozens of competitors, content aggregation from hundreds of sources, RAG pipeline ingestion from varied documentation sites), a unified API eliminates the overhead of finding, evaluating, and configuring a different Actor for each site.
+
+The unified approach also means there is no gap when you need to scrape a site that does not have an Actor. Reader handles any URL without site specific configuration.
+
+### The tradeoff in practice
+
+Apify's marketplace is deeper. Reader's API is simpler. If your primary need is "scrape Amazon product data" and a well maintained Actor exists, Apify gets you to structured output faster. If your primary need is "scrape 50 different websites and get clean markdown for all of them," Reader handles this with zero per site configuration.
+
+## Open Source
+
+Both platforms have open source components, but the scope differs.
+
+Apify's **Crawlee** is open source under Apache 2.0. It is a capable crawling framework that handles request scheduling, proxy rotation, session management, and browser automation. You can run Crawlee independently on your own infrastructure without Apify's platform. However, the Apify platform itself (scheduling, storage, monitoring, marketplace, billing) is closed source.
+
+Reader's **entire engine** is open source under Apache 2.0. The scraping engine, crawling infrastructure, browser pool management, stealth stack (Playwright with fingerprint-generator), and Supermarkdown conversion engine are all on GitHub. You can self host the complete platform on your own servers. There are no features gated behind the managed service.
+
+**Supermarkdown**, Reader's HTML to markdown conversion engine, is a separate open source project under the MIT license. It is a Rust library available as a crate and npm package.
+
+The practical difference: with Crawlee, you get a crawling framework but need to build the infrastructure around it (hosting, scheduling, storage, monitoring). With Reader's open source engine, you get the complete platform.
+
+## Crawling
+
+Both platforms can crawl websites, but through different mechanisms.
+
+On Apify, crawling happens through Actors or Crawlee. The Website Content Crawler Actor crawls a domain and returns page content. Crawlee provides programmatic crawling with full control over the crawling logic. Both are capable but require either Actor configuration or code.
+
+Reader's crawl is a single API parameter. Add `maxDepth` and `maxPages` to a scrape request and it becomes a crawl. BFS link discovery stays on the same domain. URL pattern filtering (includePatterns and excludePatterns) targets specific sections. Every discovered page is scraped and converted to clean markdown. One call, one response.
+
+## Browser Automation
+
+Apify provides browser automation through Crawlee's PlaywrightCrawler and PuppeteerCrawler, and through Actors that use browsers internally. You get browser access as part of the crawling framework.
+
+Reader provides cloud browser sessions with full CDP compatibility. Create a session, get a WebSocket endpoint, and connect Playwright or Puppeteer directly. The sessions include stealth features (fingerprint generation, identity randomization, and proxy rotation) built in. Sessions persist for interactive workflows like logging in, navigating dashboards, and filling forms.
+
+## AI and LLM Integration
+
+Apify integrates with LangChain (via the Apify document loader), supports MCP, and exports to formats that AI pipelines consume. Actors can produce structured JSON, CSV, or other formats.
+
+Reader is built for AI from the ground up. The default output format is clean markdown optimized for LLM context windows (67 to 87 percent fewer tokens than raw HTML). The extract capability produces structured JSON from any page. The MCP server exposes 9 tools for AI agents. Browser sessions let agents interact with authenticated web applications.
+
+The philosophical difference: Apify is a general purpose automation platform that added AI integrations. Reader is AI native infrastructure where clean LLM output is the default, not an option.
+
+## When to Pick Each Tool
+
+### Choose Apify if:
+
+You need pre built scrapers for specific sites without writing custom code. You want a marketplace where someone else handles site specific maintenance. You need scheduling, storage, and monitoring built into the platform. You prefer the Actor ecosystem for rapid prototyping across many popular sites.
+
+### Choose Reader if:
+
+You scrape many different sites and want one consistent API for all of them. You need Apache 2.0 licensing with full self hosting and no feature gaps. You want clean markdown output by default for LLM and RAG pipelines. You need CDP browser sessions for authenticated workflows. You prefer transparent per page credits over Compute Unit pricing.
+
+## Getting Started with Reader
+
+```python
+from reader_py import ReaderClient
+
+reader = ReaderClient(api_key="rdr_your_api_key")
+
+# Scrape any URL to clean markdown
+result = reader.read(url="https://example.com")
+print(result.data.markdown)
+
+# Crawl an entire site
+result = reader.read(
+    url="https://docs.example.com",
+    max_depth=3,
+    max_pages=100
+)
+for page in result.data:
+    print(f"{page.url}: {len(page.markdown)} chars")
+```
+
+Reader offers 1,000 free pages per month at [reader.dev](https://reader.dev) with no credit card required. Full documentation is at [docs.reader.dev](https://docs.reader.dev). Source code is on [GitHub](https://github.com/vakra-dev/reader).
+
+## Conclusion
+
+Apify and Reader solve web scraping from opposite directions. Apify gives you a marketplace of specialized tools where each Actor is optimized for a specific job. Reader gives you a unified API where one endpoint handles any URL with clean markdown output.
+
+If you work primarily with well known sites that have maintained Actors, Apify gets you to structured data faster. If you work across many sites and want consistency, transparent pricing, open source licensing, and AI native output, Reader provides a simpler path.

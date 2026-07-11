@@ -14,7 +14,7 @@ const valueProps = [
     icon: CreditCard,
     title: "One API, one credit pool",
     description:
-      "Read, crawl, browse - all through one API key, one credit pool. No separate billing tracks, no hidden multipliers. One credit, one page. Always.",
+      "Read, crawl, browse, extract. All through one API key, one credit pool. No separate billing tracks, no hidden multipliers. One credit per page. Simple and predictable.",
   },
   {
     icon: Code2,
