@@ -1,0 +1,431 @@
+---
+title: "Price Monitoring at Scale with Web Scraping (2026)"
+description: "Build a price monitoring system with web scraping. Covers data extraction, change detection, scheduling, alerting, and managed scraping."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Use Cases"
+keywords: ["price monitoring web scraping", "competitor price tracking", "price intelligence", "price scraping"]
+schemaType: "article"
+faq:
+  - question: "How often should I monitor competitor prices?"
+    answer: "It depends on your market. Hourly for travel, flash sales, and marketplace buy box competition. Daily for general e-commerce and retail. Weekly for B2B and enterprise pricing. Start daily and adjust based on how frequently prices actually change in your market."
+  - question: "How many products can I monitor?"
+    answer: "With Reader's batch scraping (up to 1,000 URLs per request), you can monitor thousands of products across multiple competitors. A 500 product catalog across 5 competitors (2,500 URLs) processes in minutes. The free tier (1,000 credits per month) covers roughly 1,000 product page scrapes per month."
+  - question: "Do I need CSS selectors for each retailer?"
+    answer: "Not with Reader's extract capability. Define a schema (price, stock status, original price) and the LLM extracts the data from any product page regardless of the layout. This eliminates per retailer selector maintenance, which is the biggest operational cost of traditional price monitoring systems."
+  - question: "What database should I use for price history?"
+    answer: "SQLite works for small to medium catalogs (under 10,000 products). PostgreSQL or MySQL for larger deployments. Time series databases (InfluxDB, TimescaleDB) are optimized for this workload if you need fast queries over millions of historical observations. For most teams starting out, SQLite is sufficient."
+---
+
+Competitor prices change constantly. A manual check of 50 competitor product pages takes hours and is outdated by the time you finish. Automated price monitoring scrapes those pages on a schedule, detects changes, and alerts your team in real time. Retailers use it for dynamic pricing. Manufacturers use it to enforce MAP (minimum advertised price) compliance. Marketplaces use it to stay competitive. Travel companies use it to track fare movements.
+
+This guide covers how to build a price monitoring pipeline: what data to extract, how to structure the scraping, change detection logic, scheduling, alerting, and how Reader simplifies the infrastructure.
+
+## What Price Monitoring Captures
+
+A complete price monitoring system tracks more than the current price. The full data model includes several dimensions.
+
+### Core Price Data
+
+**Current price.** The displayed sale price the customer pays. On many e-commerce sites, this is the discounted price if a promotion is active.
+
+**Original price.** The "was" or "list" price before any discount. The relationship between original and current price reveals the discount percentage and promotional strategy.
+
+**Currency.** Essential for cross border monitoring. The same product on Amazon.com, Amazon.co.uk, and Amazon.de has different prices in different currencies.
+
+**Price per unit.** For products sold by weight, volume, or count (groceries, beverages, office supplies), the unit price enables fair comparison across different pack sizes.
+
+### Promotional Data
+
+**Discount amount and percentage.** Calculated from original and current price. Track how deep competitors discount and how often.
+
+**Coupon codes.** Some sites display coupon codes on the product page or apply them at checkout. Monitoring these reveals promotional strategies invisible in the list price.
+
+**Bundle pricing.** "Buy 2 get 1 free," "save 15% on 3 or more," and similar offers change the effective per unit price without changing the displayed price.
+
+**Promotional labels.** "Limited time offer," "Deal of the day," "Lightning deal," "Clearance." These labels signal pricing intent and urgency.
+
+### Availability Data
+
+**Stock status.** In stock, out of stock, limited stock ("Only 3 left"), pre order, backorder. Stock status directly affects pricing decisions (competitors out of stock is an opportunity to raise prices).
+
+**Shipping cost and speed.** Free shipping thresholds, standard vs express pricing, and delivery timeframes all factor into the total cost a customer pays. Two identical products at the same price with different shipping costs have different effective prices.
+
+**Seller information.** On marketplaces (Amazon, Walmart, eBay), multiple sellers offer the same product at different prices. The buy box winner, third party seller prices, and fulfilled by marketplace vs fulfilled by seller distinctions affect pricing strategy.
+
+### Metadata
+
+**Product identifiers.** ASIN (Amazon), UPC/EAN (universal), SKU (retailer specific), GTIN (global). Identifiers enable cross retailer matching: the same product across different stores.
+
+**Category and brand.** For monitoring by segment: "all running shoes under $150" or "all Samsung TVs 55 inch and above."
+
+**Scrape timestamp.** When the price was observed. Essential for tracking price changes over time and building historical trends.
+
+## Architecture of a Price Monitoring System
+
+A production price monitoring system has four components: a product catalog, a scraping engine, a change detection layer, and an alerting/reporting layer.
+
+### Product Catalog
+
+The catalog defines what you monitor. Each entry contains the product identifier, the URL to scrape, the competitor name, and any metadata for grouping and filtering.
+
+```python
+catalog = [
+    {
+        "product_id": "RUNNING-SHOE-001",
+        "name": "Nike Air Zoom Pegasus 41",
+        "competitor": "Amazon",
+        "url": "https://www.amazon.com/dp/B0D1XD1ZV3",
+        "category": "Running Shoes",
+        "brand": "Nike",
+    },
+    {
+        "product_id": "RUNNING-SHOE-001",
+        "name": "Nike Air Zoom Pegasus 41",
+        "competitor": "Dick's Sporting Goods",
+        "url": "https://www.dickssportinggoods.com/p/...",
+        "category": "Running Shoes",
+        "brand": "Nike",
+    },
+    # Same product, different retailers
+]
+```
+
+The same product_id across different competitor URLs enables cross retailer price comparison. Group by product_id to see who offers the lowest price at any point in time.
+
+### Scraping Engine
+
+The engine visits each URL in the catalog, extracts price data, and stores the results with timestamps.
+
+```python
+from reader_py import ReaderClient
+import json
+from datetime import datetime
+
+client = ReaderClient(api_key="rdr_your_api_key")
+
+def scrape_price(entry):
+    result = client.read(
+        url=entry["url"],
+        extract={
+            "schema": {
+                "current_price": "number",
+                "original_price": "number",
+                "currency": "string",
+                "in_stock": "boolean",
+                "stock_level": "string",
+                "shipping": "string",
+            }
+        }
+    )
+
+    if result.data.extracted:
+        return {
+            **entry,
+            **result.data.extracted,
+            "scraped_at": datetime.utcnow().isoformat(),
+        }
+    return None
+
+# Scrape all catalog entries
+results = []
+for entry in catalog:
+    price_data = scrape_price(entry)
+    if price_data:
+        results.append(price_data)
+        print(f"{entry['competitor']}: "
+              f"${price_data.get('current_price', 'N/A')}")
+```
+
+Reader's extract capability pulls typed data from any product page. The schema defines the fields. Missing fields return null. No CSS selectors to maintain: the LLM understands the page structure and extracts the data regardless of layout.
+
+This is the key advantage for price monitoring specifically. E-commerce sites change their page layouts frequently through A/B tests and redesigns. Selector based scrapers break when layouts change. Schema based extraction adapts because the LLM reads the content, not the selectors.
+
+### Batch Scraping for Scale
+
+For catalogs with hundreds or thousands of products, use batch scraping:
+
+```python
+# Group URLs for batch processing
+batch_size = 100
+urls = [entry["url"] for entry in catalog]
+
+for i in range(0, len(urls), batch_size):
+    batch_urls = urls[i:i + batch_size]
+    result = client.read(urls=batch_urls)
+
+    for page in result.data:
+        # Match page URL back to catalog entry
+        entry = next(
+            e for e in catalog if e["url"] == page.url
+        )
+        # Process the page markdown or extracted data
+        print(f"Scraped: {entry['name']} from {entry['competitor']}")
+```
+
+Batch requests process up to 1,000 URLs in parallel. A 500 product catalog across 5 competitors (2,500 URLs) completes in minutes rather than the hours that sequential scraping would require.
+
+### Change Detection
+
+Compare the current scrape with the previous scrape to detect price changes.
+
+```python
+import json
+
+def load_previous_prices(filepath):
+    try:
+        with open(filepath, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+def detect_changes(current_results, previous_prices):
+    changes = []
+
+    for result in current_results:
+        key = f"{result['product_id']}_{result['competitor']}"
+        current_price = result.get("current_price")
+        previous_price = previous_prices.get(key, {}).get("current_price")
+
+        if previous_price is None:
+            # First observation, no change to detect
+            continue
+
+        if current_price is None:
+            continue
+
+        if current_price != previous_price:
+            change_pct = ((current_price - previous_price)
+                         / previous_price * 100)
+            changes.append({
+                "product_id": result["product_id"],
+                "name": result["name"],
+                "competitor": result["competitor"],
+                "previous_price": previous_price,
+                "current_price": current_price,
+                "change_amount": round(current_price - previous_price, 2),
+                "change_percent": round(change_pct, 1),
+                "direction": "up" if current_price > previous_price
+                            else "down",
+                "detected_at": result["scraped_at"],
+            })
+
+    return changes
+
+# Load previous prices
+previous = load_previous_prices("previous_prices.json")
+
+# Detect changes
+changes = detect_changes(results, previous)
+
+for change in changes:
+    direction = "up" if change["direction"] == "up" else "down"
+    print(f"[{direction}] {change['name']} at {change['competitor']}: "
+          f"${change['previous_price']} -> ${change['current_price']} "
+          f"({change['change_percent']:+.1f}%)")
+
+# Save current prices for next comparison
+current_prices = {
+    f"{r['product_id']}_{r['competitor']}": r
+    for r in results if r.get("current_price")
+}
+with open("previous_prices.json", "w") as f:
+    json.dump(current_prices, f, indent=2)
+```
+
+### Alerting
+
+Send notifications when prices change beyond defined thresholds.
+
+```python
+def check_alerts(changes, rules):
+    alerts = []
+
+    for change in changes:
+        for rule in rules:
+            # Price drop alert
+            if (rule["type"] == "price_drop"
+                and change["direction"] == "down"
+                and abs(change["change_percent"]) >= rule["threshold"]):
+                alerts.append({
+                    "rule": rule["name"],
+                    "change": change,
+                    "message": (
+                        f"{change['name']} dropped "
+                        f"{abs(change['change_percent'])}% "
+                        f"at {change['competitor']}"
+                    ),
+                })
+
+            # Competitor undercut alert
+            if (rule["type"] == "undercut"
+                and change["current_price"] < rule["your_price"]):
+                alerts.append({
+                    "rule": rule["name"],
+                    "change": change,
+                    "message": (
+                        f"{change['competitor']} is now "
+                        f"${change['current_price']} vs your "
+                        f"${rule['your_price']} for {change['name']}"
+                    ),
+                })
+
+    return alerts
+
+# Define alert rules
+alert_rules = [
+    {
+        "name": "Big price drop",
+        "type": "price_drop",
+        "threshold": 10,  # Alert on 10%+ drops
+    },
+    {
+        "name": "Competitor undercut",
+        "type": "undercut",
+        "your_price": 129.99,
+    },
+]
+
+alerts = check_alerts(changes, alert_rules)
+for alert in alerts:
+    print(f"ALERT: {alert['message']}")
+    # Send to Slack, email, or webhook
+```
+
+Common alert types: price drops above a threshold percentage, competitor price below your price (undercut), product going out of stock at a competitor (opportunity), price returning to pre sale level (promotion ended), and new product appearing in a competitor's catalog.
+
+## Scheduling
+
+Price monitoring requires regular scraping on a schedule. The frequency depends on your market.
+
+**Hourly.** Travel (flights, hotels), electronics flash sales, marketplace buy box competition. Prices change rapidly and the advantage of knowing first is measured in minutes.
+
+**Daily.** General e-commerce, retail, consumer goods. Most price changes happen daily. Morning scrapes capture overnight changes before the business day starts.
+
+**Weekly.** B2B pricing, enterprise software, industrial supplies. Prices change less frequently. Weekly monitoring catches trends without excessive scraping.
+
+### Scheduling with cron
+
+```bash
+# Daily at 6:00 AM UTC
+0 6 * * * cd /path/to/scraper && python price_monitor.py
+
+# Every 4 hours for high-frequency monitoring
+0 */4 * * * cd /path/to/scraper && python price_monitor.py
+
+# Monday and Thursday at 8:00 AM for weekly monitoring
+0 8 * * 1,4 cd /path/to/scraper && python price_monitor.py
+```
+
+### Scheduling with Python
+
+```python
+import schedule
+import time
+
+def run_price_monitor():
+    results = [scrape_price(entry) for entry in catalog]
+    results = [r for r in results if r is not None]
+
+    previous = load_previous_prices("previous_prices.json")
+    changes = detect_changes(results, previous)
+    alerts = check_alerts(changes, alert_rules)
+
+    for alert in alerts:
+        send_notification(alert)
+
+    # Save current state
+    save_current_prices(results)
+    print(f"Monitored {len(results)} prices. "
+          f"{len(changes)} changes. {len(alerts)} alerts.")
+
+# Run daily at 6 AM
+schedule.every().day.at("06:00").do(run_price_monitor)
+
+while True:
+    schedule.run_pending()
+    time.sleep(60)
+```
+
+## Storing Historical Data
+
+Price monitoring becomes more valuable over time as you build historical trends. Store every observation, not just the latest price.
+
+```python
+import sqlite3
+from datetime import datetime
+
+def init_db():
+    conn = sqlite3.connect("prices.db")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS price_observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id TEXT,
+            competitor TEXT,
+            current_price REAL,
+            original_price REAL,
+            in_stock BOOLEAN,
+            currency TEXT,
+            scraped_at TEXT
+        )
+    """)
+    conn.commit()
+    return conn
+
+def store_observation(conn, result):
+    conn.execute("""
+        INSERT INTO price_observations
+        (product_id, competitor, current_price, original_price,
+         in_stock, currency, scraped_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        result["product_id"],
+        result["competitor"],
+        result.get("current_price"),
+        result.get("original_price"),
+        result.get("in_stock"),
+        result.get("currency", "USD"),
+        result["scraped_at"],
+    ))
+    conn.commit()
+
+# Store all results
+conn = init_db()
+for result in results:
+    store_observation(conn, result)
+
+# Query: price history for a product
+cursor = conn.execute("""
+    SELECT competitor, current_price, scraped_at
+    FROM price_observations
+    WHERE product_id = 'RUNNING-SHOE-001'
+    ORDER BY scraped_at DESC
+    LIMIT 30
+""")
+for row in cursor:
+    print(f"{row[0]}: ${row[1]} at {row[2]}")
+```
+
+Historical data enables trend analysis (is this competitor gradually raising prices?), seasonal pattern detection (do they run the same promotion every Q4?), and competitive response measurement (how quickly does competitor B match competitor A's price drop?).
+
+## Anti Bot Considerations
+
+[E-commerce sites](/solutions/ecommerce) are among the most heavily protected targets on the web. [Amazon](/blog/scrape-amazon-python), Walmart, Target, and major retailers use aggressive [anti bot detection](/blog/anti-bot-detection) including [Cloudflare](/blog/bypass-cloudflare), DataDome, and PerimeterX.
+
+Reader handles anti bot bypass through its stealth stack using Playwright with fingerprint-generator for browser fingerprint generation, identity randomization, and proxy rotation with datacenter and residential proxy pools. For price monitoring specifically, the extract capability (schema based extraction via LLM) is more resilient than selector based extraction because it does not break when the site changes its CSS class names or page structure.
+
+## Legal Considerations
+
+Price monitoring of publicly displayed prices is a common business practice. Monitoring competitor prices is legal in most jurisdictions when you are collecting publicly available pricing information, using the data for internal business decisions, and complying with rate limits and terms of service.
+
+However, some e-commerce sites restrict automated access in their terms of service. Scraping at excessive rates can constitute a denial of service. Republishing scraped prices (building a public price comparison site) may raise additional legal concerns.
+
+Evaluate each target site's terms of service. Maintain reasonable request rates. Use the data for internal competitive intelligence rather than public republication. Consult legal counsel for specific compliance requirements.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## Conclusion
+
+Automated price monitoring replaces hours of manual research with a system that runs on schedule, detects changes in real time, and alerts your team to competitive threats and opportunities. The architecture is straightforward: a product catalog, a scraping engine, change detection, and alerting.
+
+Reader's extract capability is particularly well suited for price monitoring because schema based extraction is more resilient to page layout changes than CSS selectors. When a retailer redesigns their product page (which happens regularly), selector based scrapers break and need manual updates. Schema based extraction continues working because the LLM reads the content, not the selectors.

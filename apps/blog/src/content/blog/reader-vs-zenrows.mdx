@@ -14,7 +14,7 @@ faq:
   - question: "Is ZenRows open source?"
     answer: "No. ZenRows is fully closed source with no public GitHub repository and no self hosting option."
   - question: "Which has better anti bot bypass?"
-    answer: "ZenRows is more specialized in anti bot bypass with Adaptive Stealth Mode and dedicated focus on Cloudflare, Akamai, DataDome, and PerimeterX. Reader handles common anti bot scenarios through browser fingerprinting and proxy escalation but is not as deeply specialized as ZenRows."
+    answer: "ZenRows is more specialized in anti bot bypass with Adaptive Stealth Mode and dedicated focus on Cloudflare, Akamai, DataDome, and PerimeterX. Reader handles common anti bot scenarios through browser fingerprinting and proxy rotation but is not as deeply specialized as ZenRows."
   - question: "Can I self host either tool?"
     answer: "Only Reader. Reader is fully open source under Apache 2.0 and can be deployed on your own infrastructure with no feature gaps. ZenRows has no self hosting option."
   - question: "Which has better developer experience?"
@@ -73,9 +73,9 @@ ZenRows also offers dedicated anti bot content on their blog covering bypass tec
 
 In the Scrapeway independent benchmark from June 2026, which tested 8 scraping APIs across 12 target websites, ZenRows scored 31% overall success, ranking 7th out of 8 APIs tested, with a 13.3 second average response time. It is important to note that benchmark results vary significantly by target site and by testing methodology. ZenRows may perform considerably better on the specific sites you care about. The 99.93% success rate ZenRows markets is a self reported figure and likely measured under different conditions than the independent benchmark.
 
-Reader includes anti bot capabilities through its browser sessions: TLS fingerprinting to match real Chrome browser signatures, navigator spoofing to prevent headless detection, WebRTC masking, and tiered proxy escalation that automatically moves from host IP to datacenter proxy to residential proxy based on response signals. Reader does not yet have independent benchmark data published, and we are transparent about that.
+Reader includes anti bot capabilities through its browser sessions: browser fingerprint generation, identity randomization, and proxy rotation with datacenter and residential pools. Reader does not yet have independent benchmark data published, and we are transparent about that.
 
-If your primary challenge is scraping heavily protected sites where anti bot bypass is the bottleneck, ZenRows is more specialized for that specific problem. Reader's anti bot approach is broader: it provides the building blocks (stealthed browsers, proxy escalation, fingerprinting) and gives you full control through CDP, rather than offering an opaque system that handles everything automatically.
+If your primary challenge is scraping heavily protected sites where anti bot bypass is the bottleneck, ZenRows is more specialized for that specific problem. Reader's anti bot approach is broader: it provides the building blocks (stealthed browsers, proxy rotation, fingerprinting) and gives you full control through CDP, rather than offering an opaque system that handles everything automatically.
 
 ## Browser Automation
 

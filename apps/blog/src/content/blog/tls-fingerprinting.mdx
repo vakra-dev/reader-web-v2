@@ -1,0 +1,274 @@
+---
+title: "TLS Fingerprinting Explained for Web Scrapers"
+description: "Understand how TLS fingerprinting works, why it catches scrapers even with correct headers, and how to match browser fingerprints in Python, Go, and Node.js."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Deep Dives"
+keywords: ["tls fingerprinting", "ja3 fingerprint", "tls fingerprint scraping", "browser fingerprint bypass"]
+schemaType: "article"
+faq:
+  - question: "Why does setting a Chrome User Agent not prevent blocking?"
+    answer: "The User Agent is an HTTP header. TLS fingerprinting happens during the TLS handshake, before HTTP headers are read. The server already knows your true client from the TLS fingerprint by the time it reads your User Agent header. You need to match both the TLS fingerprint and the HTTP headers for the identity to be consistent."
+  - question: "What is the difference between JA3 and JA4?"
+    answer: "Both hash the TLS ClientHello parameters. JA3 (2017) uses MD5 on 5 fields: TLS version, cipher suites, extensions, elliptic curves, point formats. JA4 (2023) is more detailed: it includes cipher suite count, extension count, ALPN values, and signature algorithms, split into sections that can be compared independently. JA4 is harder to spoof because it captures more parameters. Most anti bot systems check at least one. Many check both."
+  - question: "Can I change my TLS fingerprint without a real browser?"
+    answer: "Yes. curl_cffi (Python) and utls (Go) modify the TLS implementation to match browser fingerprints. This works for anti bot systems that only check TLS. It does not work for systems that also require JavaScript execution, browser fingerprinting, or behavioral analysis."
+  - question: "Does a VPN change my TLS fingerprint?"
+    answer: "No. A VPN changes your IP address. The TLS handshake is end to end between your client and the server, passing through the VPN without modification. Your TLS fingerprint is unchanged. A VPN helps with IP reputation only, not TLS fingerprinting."
+---
+
+TLS fingerprinting is the reason your scraper gets blocked even when you set a perfect Chrome User Agent, send all the right headers, and rotate your proxies. The server detects that your TLS handshake does not match Chrome, regardless of what your headers claim. This single signal is enough to block the request before the server reads a single byte of your HTTP request.
+
+This guide explains what TLS fingerprinting is, how anti bot systems use it, which HTTP clients produce which fingerprints, and how to match browser fingerprints in your scraping code.
+
+## What TLS Fingerprinting Is
+
+When your client connects to a website over HTTPS, the first thing that happens is a TLS handshake. Your client sends a ClientHello message to the server announcing its encryption capabilities. This message contains several fields:
+
+**TLS version.** The maximum TLS version your client supports (TLS 1.2, TLS 1.3).
+
+**Cipher suites.** The list of encryption algorithms your client supports, in order of preference. Chrome supports a specific set of cipher suites in a specific order. Python requests supports a different set in a different order.
+
+**Extensions.** TLS extensions your client supports, including Server Name Indication (SNI), Application Layer Protocol Negotiation (ALPN), signature algorithms, supported groups, and others. The number, type, and order of extensions varies by client.
+
+**Elliptic curves.** The elliptic curve groups your client supports for key exchange. Also called "supported groups" in TLS 1.3.
+
+**Elliptic curve point formats.** How your client represents points on elliptic curves (relevant for TLS 1.2).
+
+**GREASE values.** Generate Random Extensions And Sustain Extensibility. Chrome inserts random GREASE values in cipher suites, extensions, and supported groups to test server compatibility. Python's ssl module does not insert GREASE values. This alone is a differentiating signal.
+
+Every HTTP client produces a unique combination of these fields. The combination is a fingerprint that identifies the client implementation, not the client's identity or IP address.
+
+## JA3 and JA4
+
+JA3 is a method for creating fingerprints from the TLS ClientHello, developed by John Althouse, Jeff Atkinson, and Josh Atkins at Salesforce in 2017. It concatenates the TLS version, cipher suites, extensions, elliptic curves, and point formats into a string, then hashes it with MD5.
+
+```
+JA3 = md5(TLSVersion,Ciphers,Extensions,EllipticCurves,EllipticCurvePointFormats)
+```
+
+Every unique combination of these fields produces a unique JA3 hash. Chrome 126 on Windows produces one hash. Python requests 2.32 produces a different hash. Go net/http 1.22 produces yet another.
+
+**JA4** is the successor to JA3, developed by John Althouse in 2023. It provides a more detailed fingerprint that is harder to spoof. JA4 includes additional parameters: the number of cipher suites, the number of extensions, ALPN protocol values, and signature algorithms. The fingerprint is split into sections (JA4_a, JA4_b, JA4_c) that can be compared individually.
+
+Most anti bot systems check at least JA3. Many now check JA4 as well. Some check both. The important point is that both are derived from the same ClientHello message and both reveal the true client implementation.
+
+## How Anti Bot Systems Use TLS Fingerprints
+
+The attack is simple: compare what the client claims to be (via the User Agent header) with what the TLS fingerprint reveals it actually is.
+
+### The Mismatch Detection
+
+Your scraper sends:
+```
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0
+```
+
+But the TLS fingerprint shows Python requests 2.32.
+
+The anti bot system sees a request that claims to be Chrome but has a Python TLS fingerprint. This is not Chrome. This is a Python script pretending to be Chrome. Block it.
+
+This check happens at the connection level, before the HTTP request is even read. The TLS handshake completes before the server sees your headers. By the time your carefully crafted User Agent arrives, the server already knows you are not Chrome.
+
+### Fingerprint Databases
+
+Anti bot systems maintain databases mapping JA3/JA4 hashes to known clients. They know what Chrome 126, Firefox 128, Safari 18, Edge 126, and every other major browser looks like at the TLS layer. They also know what Python requests, Go net/http, curl, Node.js fetch, Java HttpClient, and every other HTTP library looks like.
+
+When a new request arrives, the system looks up the JA3/JA4 hash. If it matches a known browser, it is allowed (pending other checks). If it matches a known scripting library, it is flagged. If it matches nothing known, it is treated with suspicion.
+
+### Beyond Simple Matching
+
+Sophisticated anti bot systems go beyond simple JA3/JA4 lookup.
+
+**HTTP/2 fingerprinting.** The HTTP/2 settings frame contains parameters (header table size, max concurrent streams, initial window size, max frame size, max header list size) that differ between clients. Chrome, Firefox, and curl each send different HTTP/2 settings. This is a second layer of fingerprinting that operates above TLS.
+
+**Header order fingerprinting.** The order in which HTTP headers appear in the request differs between clients. Chrome sends headers in a specific order. Python requests sends them in a different order. Some anti bot systems check this order as an additional signal.
+
+**Combined scoring.** No single signal is definitive. Anti bot systems combine TLS fingerprint, HTTP/2 fingerprint, header order, header values, IP reputation, and behavioral signals into a composite risk score. TLS fingerprinting is typically the first check because it is the cheapest (computed from data already available during the handshake) and the most discriminating (few scrapers address it).
+
+## Which Clients Produce Which Fingerprints
+
+Understanding which tools produce which fingerprints tells you exactly why your scraper gets blocked and what you need to change.
+
+### Flagged as Non Browser (blocked by default)
+
+**Python requests.** Uses Python's ssl module, which produces a distinctive JA3 that does not match any browser. Setting `User-Agent: Chrome/126` changes nothing at the TLS layer. Every anti bot system that checks TLS fingerprints blocks Python requests on protected sites.
+
+**Python httpx.** Same issue. httpx uses Python's ssl module (or httpcore) and produces a non browser JA3.
+
+**Go net/http.** Go's crypto/tls implementation produces a distinctive JA3. The cipher suites, extension order, and GREASE behavior do not match any browser.
+
+**Node.js native fetch / undici.** Node.js uses OpenSSL bindings with different cipher suite ordering and extensions than Chrome.
+
+**Java HttpClient.** Java's SSL implementation (JSSE) produces a distinctive fingerprint.
+
+**Ruby Net::HTTP.** Ruby's OpenSSL bindings produce a non browser fingerprint.
+
+**curl (default).** Standard curl uses OpenSSL, LibreSSL, or GnuTLS depending on the build. All produce non browser fingerprints.
+
+### Match Real Browsers (pass TLS checks)
+
+**Chrome (real browser).** The reference fingerprint. All anti bot systems recognize and allow the Chrome JA3/JA4.
+
+**Firefox (real browser).** Produces a Firefox specific fingerprint. Recognized and allowed.
+
+**Playwright / Puppeteer.** These run real Chromium, so they produce authentic Chrome TLS fingerprints. The TLS layer is genuine. However, they have other detection vectors (navigator.webdriver, canvas fingerprint, plugin enumeration) that require stealth measures.
+
+**curl_cffi with impersonate.** Patches curl to match a browser's TLS parameters (cipher suites, extensions, GREASE, HTTP/2 settings). Produces a fingerprint that matches Chrome or Firefox.
+
+**Playwright with fingerprint-generator / Reader.** Emulates real Chrome browser fingerprints at the engine level. The TLS handshake is indistinguishable from real Chrome.
+
+## How to Match Browser Fingerprints
+
+### Python: curl_cffi
+
+curl_cffi is the most practical solution for Python scrapers that need to match browser TLS fingerprints without running a real browser.
+
+```python
+from curl_cffi import requests
+
+# Match Chrome's TLS fingerprint
+response = requests.get(
+    "https://tls-fingerprint-test.com/",
+    impersonate="chrome",
+)
+
+print(f"Status: {response.status_code}")
+print(f"JA3 match: Chrome")
+```
+
+curl_cffi wraps libcurl with browser impersonation. The `impersonate="chrome"` parameter configures curl to match Chrome's TLS parameters: cipher suites, extensions, GREASE values, and HTTP/2 settings. The resulting JA3/JA4 fingerprint matches real Chrome.
+
+Available impersonation targets: `chrome`, `chrome99`, `chrome100`, `chrome101` through `chrome126`, `firefox`, `safari`.
+
+```python
+# Session for maintaining cookies across requests
+session = requests.Session(impersonate="chrome")
+
+# First request (may trigger challenge, sets cookies)
+response = session.get("https://protected-site.com/")
+
+# Second request (includes cookies from first)
+response = session.get("https://protected-site.com/data")
+```
+
+**What curl_cffi solves:** TLS fingerprint mismatch. The connection produces a Chrome compatible JA3/JA4.
+
+**What curl_cffi does not solve:** JavaScript challenges (curl_cffi cannot execute JavaScript), browser fingerprinting (no DOM environment), and behavioral analysis (no mouse/scroll events).
+
+### Go: utls
+
+For Go scrapers, the utls library (a fork of Go's crypto/tls) provides browser TLS impersonation.
+
+```go
+import (
+    tls "github.com/refraction-networking/utls"
+    "net"
+    "net/http"
+)
+
+// Create a connection with Chrome's TLS fingerprint
+dial := func(network, addr string) (net.Conn, error) {
+    conn, err := net.Dial(network, addr)
+    if err != nil {
+        return nil, err
+    }
+
+    host, _, _ := net.SplitHostPort(addr)
+    tlsConn := tls.UClient(conn, &tls.Config{ServerName: host},
+        tls.HelloChrome_Auto)
+
+    if err := tlsConn.Handshake(); err != nil {
+        return nil, err
+    }
+    return tlsConn, nil
+}
+
+transport := &http.Transport{Dial: dial}
+client := &http.Client{Transport: transport}
+```
+
+utls's `HelloChrome_Auto` uses the latest Chrome fingerprint. Other options include `HelloFirefox_Auto` and `HelloSafari_Auto`.
+
+### Node.js: undici with custom dispatcher
+
+Node.js solutions are less mature. The most reliable approach is using Playwright or Puppeteer (which run real Chromium with authentic TLS) rather than trying to patch Node's TLS implementation.
+
+For HTTP level scraping without a browser, some developers use curl_cffi via its Python bindings in a subprocess, which is inelegant but functional.
+
+### Real Browser (Playwright / Puppeteer)
+
+The most reliable solution is a real browser. Playwright and Puppeteer run real Chromium, which produces authentic Chrome TLS fingerprints without any patching.
+
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+    page.goto("https://protected-site.com")
+    content = page.content()
+    browser.close()
+```
+
+The TLS fingerprint is genuine Chrome. No impersonation needed. However, headless browsers have other detection vectors ([navigator.webdriver](/blog/anti-bot-detection), canvas fingerprinting, plugin enumeration) that require additional stealth measures.
+
+## How Reader Handles TLS Fingerprinting
+
+Reader's approach to TLS fingerprinting differs from both curl_cffi (library level impersonation) and raw Playwright (browser with detectable automation signals).
+
+Reader uses Playwright with fingerprint-generator, which emulates real Chrome browser fingerprints at the engine level. This means:
+
+**TLS fingerprint.** The JA3/JA4 matches real Chrome because the browser engine produces authentic TLS parameters. This is not impersonation (matching parameters externally) but genuine browser behavior.
+
+**HTTP/2 fingerprint.** The HTTP/2 settings frame matches Chrome because the browser engine uses Chrome's HTTP/2 implementation.
+
+**Header order.** Headers are sent in Chrome's native order because the browser engine controls header construction.
+
+**navigator.webdriver.** Set to false at the engine level (not patched via JavaScript, which anti bot systems can detect by checking if the property descriptor has been modified).
+
+**Combined effect.** Every layer (TLS, HTTP/2, headers, DOM properties) is consistent. There is no "this looks like Chrome at TLS but has a patched webdriver property" mismatch that sophisticated systems detect.
+
+```python
+from reader_py import ReaderClient
+
+reader = ReaderClient(api_key="rdr_your_api_key")
+
+# TLS fingerprinting handled at the engine level
+result = reader.read(url="https://tls-protected-site.com")
+print(result.data.markdown)
+```
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## Testing Your TLS Fingerprint
+
+Before scraping a protected site, verify what fingerprint your client produces.
+
+Several services display your TLS fingerprint:
+
+```python
+# Check your fingerprint with curl_cffi
+from curl_cffi import requests
+
+# Without impersonation (shows your real fingerprint)
+response = requests.get("https://tls.browserleaks.com/json")
+print(response.json())
+
+# With Chrome impersonation
+response = requests.get(
+    "https://tls.browserleaks.com/json",
+    impersonate="chrome"
+)
+print(response.json())
+```
+
+Compare the JA3 hash from both requests. Without impersonation, you will see a Python/curl fingerprint. With impersonation, you will see a Chrome fingerprint. The difference between these two hashes is exactly what anti bot systems detect.
+
+## Conclusion
+
+TLS fingerprinting is the most effective first line defense in [anti bot detection](/blog/anti-bot-detection) because it operates at the connection level (before HTTP headers are read), it is cheap to compute (derived from data already in the handshake), and it is highly discriminating (every HTTP library produces a unique fingerprint).
+
+The mismatch between what your User Agent claims (Chrome) and what your TLS fingerprint reveals (Python/Go/Node/Java) is the single most common reason scrapers get blocked on protected sites. Setting headers correctly is necessary but not sufficient. You must also match at the TLS layer.
+
+Three approaches work: curl_cffi for Python HTTP requests (matches TLS but cannot execute JavaScript), Playwright/Puppeteer for browser automation (authentic TLS but other detection vectors), and Reader for managed scraping where browser fingerprint generation, identity randomization, and proxy rotation are all handled at the engine level through Playwright with fingerprint-generator.

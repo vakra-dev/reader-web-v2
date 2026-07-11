@@ -1,0 +1,336 @@
+---
+title: "Self-Host Reader: Deploy Your Own Scraping Infrastructure"
+description: "Learn how to self-host Reader on your own servers. Covers installation, proxy configuration, browser pool tuning, and when to self-host vs use the cloud."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Guides"
+keywords: ["self host web scraper", "deploy web scraping", "open source scraping infrastructure", "reader self hosted"]
+schemaType: "howto"
+faq:
+  - question: "How much does self hosting cost?"
+    answer: "Server costs depend on your provider and concurrency needs. A basic deployment (2 cores, 2GB RAM, 3 to 5 browsers) runs on a $20 to $40 per month VPS. Add proxy costs: datacenter proxies are $5 to $50 per month depending on volume, residential proxies are $50 to $500+ per month. Engineering time for setup and maintenance is the largest hidden cost."
+  - question: "Can I run Reader without proxies?"
+    answer: "Yes. The engine makes direct connections from your server's IP when no proxy environment variables are set. This works for internal sites, unprotected sites, and low volume scraping from an IP with good reputation. For protected sites, proxies are recommended."
+  - question: "Does the self hosted version include anti bot bypass?"
+    answer: "Yes. The self hosted engine includes the full stealth stack: TLS fingerprinting that matches Chrome, navigator.webdriver set to false, canvas and WebGL randomization, and browser fingerprint generation. What you provide separately is the proxy infrastructure (datacenter and residential IPs)."
+  - question: "Can I modify the source code?"
+    answer: "Yes. The Apache 2.0 license allows modification, distribution, and commercial use without copyleft restrictions. Fork the repository, modify the browser pool behavior, customize Supermarkdown conversion, integrate with internal proxy infrastructure, or add any capability you need."
+---
+
+Reader's entire engine is open source under the Apache 2.0 license. The same code that powers the managed cloud platform at reader.dev is on GitHub for you to deploy on your own infrastructure. No feature gaps. No proprietary components withheld from the open source version. Every capability available on the cloud (scraping, crawling, browser sessions, [anti bot bypass](/blog/anti-bot-detection), Supermarkdown conversion) works identically when self hosted.
+
+This guide covers when self hosting makes sense, how to install and configure the engine, proxy setup, browser pool tuning, and production deployment considerations.
+
+## When to Self Host
+
+Self hosting is not always the right choice. It adds operational responsibility: server provisioning, dependency management, browser pool monitoring, proxy procurement, and maintenance. The managed cloud platform at reader.dev handles all of this for you.
+
+Self host when:
+
+**Data sovereignty.** Your data cannot flow through third party infrastructure. Healthcare, finance, government, and defense organizations often have policies that prohibit sending data to external APIs. Self hosting keeps all traffic within your network. Crawled content, scraped pages, and browser session data never leave your servers.
+
+**Regulatory compliance.** GDPR, HIPAA, SOC 2, and other frameworks may require that data processing happens within specific geographic boundaries or on audited infrastructure. Self hosting lets you deploy on infrastructure that meets your compliance requirements.
+
+**Volume economics.** At very high volume (hundreds of thousands or millions of pages per month), the per page credit cost of the managed platform may exceed the cost of running your own infrastructure. The breakeven depends on your server costs, proxy costs, and engineering time for maintenance.
+
+**Customization.** You need to modify the scraping engine, adjust the browser pool behavior, integrate with internal proxy infrastructure, or customize the Supermarkdown conversion pipeline. The open source code is yours to modify.
+
+**Air gapped environments.** Systems that cannot connect to external APIs for security reasons. Self hosting runs entirely within your network with no outbound API calls to reader.dev.
+
+Use the managed cloud when:
+
+**You want zero ops.** No servers to provision, no browsers to manage, no proxies to procure. One API call, one response.
+
+**You are starting out.** The free tier (1,000 pages per month) lets you build and validate your pipeline before committing to infrastructure.
+
+**You need managed proxy infrastructure.** Reader's cloud includes datacenter and residential proxy pools. Building equivalent proxy infrastructure yourself is expensive and operationally complex.
+
+## Installation
+
+Reader's self hosted engine is a Node.js package that runs Playwright with fingerprint-generator (a stealth Chromium automation library) with Supermarkdown for HTML to markdown conversion.
+
+### Prerequisites
+
+Node.js 18 or newer. A system with Chrome or Chromium dependencies installed. On Ubuntu/Debian:
+
+```bash
+# Install system dependencies for Chromium
+sudo apt-get update
+sudo apt-get install -y \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatspi2.0-0
+```
+
+These are the shared libraries that Chromium requires. Without them, the browser fails to launch.
+
+### Install the Package
+
+```bash
+npm install @vakra-dev/reader
+```
+
+Note: this is the self hosted package (`@vakra-dev/reader`), not the cloud SDK (`@vakra-dev/reader-js`). The APIs are different. The self hosted package provides `reader.scrape()`, `reader.crawl()`, and `reader.browser()` methods that run locally. The cloud SDK provides `reader.read()` which calls the managed API.
+
+### Basic Usage
+
+```javascript
+const { Reader } = require('@vakra-dev/reader');
+
+async function main() {
+    const reader = new Reader();
+
+    // Scrape a single page
+    const result = await reader.scrape('https://example.com');
+    console.log(result.data[0].markdown);
+    console.log(`Title: ${result.data[0].metadata.title}`);
+
+    // Crawl a site
+    const crawlResult = await reader.crawl('https://docs.example.com', {
+        maxDepth: 2,
+        maxPages: 50,
+    });
+
+    for (const page of crawlResult.data) {
+        console.log(`${page.url}: ${page.markdown.length} chars`);
+    }
+}
+
+main();
+```
+
+The self hosted engine runs Chromium locally. Each scrape launches a browser page, navigates to the URL, renders JavaScript, converts the content to markdown through Supermarkdown, and returns the result. All processing happens on your machine.
+
+### Daemon Mode
+
+For production use, run Reader as a persistent daemon with a pre warmed browser pool:
+
+```bash
+npx reader start --direct-pool-size 5
+```
+
+Daemon mode keeps 5 browser instances running and ready. Incoming scrape requests use pre warmed browsers instead of launching new ones, reducing latency from seconds to milliseconds for the browser startup phase.
+
+## Proxy Configuration
+
+The self hosted engine does not include proxy infrastructure. You provide your own proxies through environment variables.
+
+### Setting Up Proxies
+
+```bash
+# Datacenter proxies (comma-separated list)
+export PROXY_DATACENTER="http://user:pass@dc-proxy1:port,http://user:pass@dc-proxy2:port"
+
+# Residential proxies (comma-separated list)
+export PROXY_RESIDENTIAL="http://user:pass@res-proxy1:port,http://user:pass@res-proxy2:port"
+```
+
+Reader uses datacenter and residential proxy pools: requests start on datacenter proxies, and residential proxies are available when datacenter IPs get blocked. The engine tracks per proxy health and benches failed proxies for approximately 5 minutes.
+
+### Proxy Providers
+
+You need to procure proxies from a provider. Options include:
+
+**Datacenter proxies.** Providers like BrightData, Oxylabs, IPRoyal, and SmartProxy offer datacenter proxy pools. Typical cost: $0.50 to $2.00 per GB of traffic or $1 to $5 per IP per month.
+
+**Residential proxies.** Same providers offer residential pools. Typical cost: $3 to $15 per GB. Residential proxies are significantly more expensive than datacenter but are required for sites with aggressive [anti bot protection](/blog/anti-bot-detection).
+
+**No proxies.** If your targets are internal sites, unprotected sites, or you are running from an IP with good reputation, you can skip proxies entirely. The engine works without the PROXY environment variables. It makes direct connections from your server's IP.
+
+### Proxy Rotation Behavior
+
+The self hosted engine includes the same [proxy rotation](/blog/proxy-rotation-strategies) logic as the managed cloud:
+
+**Per proxy health tracking.** Each proxy's success rate is monitored. Failed proxies are benched for approximately 5 minutes.
+
+**Auto recycling.** Browser instances (and their associated proxy connections) are retired after 100 requests or 30 minutes, whichever comes first.
+
+**Per proxy concurrency.** Each proxy handles a maximum of 2 concurrent requests by default. This prevents any single IP from generating suspicious traffic volume.
+
+**Datacenter and residential proxy pools.** When a datacenter proxy fails on a specific target, subsequent requests to that target can be routed to residential proxies.
+
+## Browser Pool Configuration
+
+The browser pool determines how many concurrent scraping operations your deployment can handle.
+
+### Pool Size
+
+```bash
+# Start with 5 browser instances
+npx reader start --direct-pool-size 5
+```
+
+Each browser instance uses approximately 100 to 200MB of RAM. A pool of 5 browsers uses 500MB to 1GB. A pool of 20 browsers uses 2 to 4GB. Size the pool based on your server's available memory and your concurrency requirements.
+
+### Pool Behavior
+
+**Retirement policy.** Each browser instance is retired after 100 pages scraped or 30 minutes of uptime, whichever comes first. This prevents memory leaks and stale browser state from accumulating. When a browser retires, a fresh instance replaces it automatically.
+
+**Request queuing.** When all browser instances are busy, incoming requests queue until a browser becomes available. Monitor queue depth to determine if you need a larger pool.
+
+**Error recovery.** If a browser instance crashes (segfault, out of memory, unhandled exception), the pool detects the failure and launches a replacement. Crashed browsers do not consume pool slots.
+
+### Tuning for Your Workload
+
+**High throughput scraping (many pages, fast).** Large pool (10 to 20 browsers), short retirement intervals. More concurrent capacity means higher throughput.
+
+**Long running browser sessions (login, multi step workflows).** Smaller pool (3 to 5 browsers), longer retirement intervals. Each session holds a browser for minutes, so fewer concurrent sessions are practical.
+
+**Mixed workload.** Start with 5 browsers. Monitor RAM usage and queue depth. Scale up if the queue grows or scale down if browsers sit idle.
+
+## Production Deployment
+
+### System Requirements
+
+| Concurrency | Pool Size | RAM | CPU |
+|-------------|-----------|-----|-----|
+| Low (1-5 concurrent) | 3-5 | 2 GB | 2 cores |
+| Medium (5-20 concurrent) | 10-15 | 4-8 GB | 4 cores |
+| High (20-50 concurrent) | 20-30 | 8-16 GB | 8 cores |
+
+SSD storage is recommended for faster browser cold starts. Browsers write temporary files (cache, profile data) that benefit from fast disk I/O.
+
+### Process Management
+
+Use a process manager to keep the daemon running, restart on crash, and manage logs:
+
+```bash
+# Using PM2
+npm install -g pm2
+pm2 start "npx reader start --direct-pool-size 10" --name reader
+
+# View logs
+pm2 logs reader
+
+# Monitor resources
+pm2 monit
+
+# Auto-restart on server reboot
+pm2 startup
+pm2 save
+```
+
+### Health Monitoring
+
+Monitor these metrics in production:
+
+**Browser pool utilization.** What percentage of browser instances are busy at any given time. Consistently above 80% means you need more capacity. Consistently below 20% means you are over provisioned.
+
+**Request latency.** Time from request received to response returned. Baseline is 2 to 10 seconds per page depending on target complexity. Increasing latency indicates resource contention.
+
+**Error rate.** Percentage of scrape requests that fail (timeouts, crashes, blocks). An increasing error rate may indicate proxy problems, target site changes, or browser pool exhaustion.
+
+**Memory usage.** Total RAM consumed by the browser pool. Steady growth without retirement indicates a memory leak. Sudden spikes indicate a problematic page causing excessive memory allocation.
+
+### Scaling Horizontally
+
+For workloads that exceed a single server's capacity, run multiple Reader instances behind a load balancer:
+
+```
+Load Balancer
+├── Reader Instance 1 (pool: 10 browsers)
+├── Reader Instance 2 (pool: 10 browsers)
+└── Reader Instance 3 (pool: 10 browsers)
+```
+
+Each instance runs independently with its own browser pool. The load balancer distributes requests across instances. No shared state is required between instances for scraping workloads (each request is independent).
+
+For crawl jobs (which maintain state across pages), route all requests for a single crawl to the same instance using sticky sessions or a job routing layer.
+
+### Security Considerations
+
+**Network isolation.** Run Reader in a private subnet. Expose only the API port through a reverse proxy (nginx, Caddy) with TLS termination and authentication.
+
+**API authentication.** The self hosted engine does not include API key authentication by default. Add authentication at the reverse proxy layer or implement a thin API wrapper that validates keys before forwarding to Reader.
+
+**Proxy credentials.** Store proxy credentials in environment variables or a secrets manager (AWS Secrets Manager, HashiCorp Vault). Do not hardcode them in configuration files.
+
+**Browser sandbox.** Chromium runs with sandboxing enabled by default. If you must disable it (`--no-sandbox`, sometimes required in containers), run the process as a non root user.
+
+## Docker Deployment
+
+Reader can be containerized for consistent deployment across environments. A Docker deployment guide is available in the documentation at docs.reader.dev. Verify the current Docker instructions there, as container configurations may change between releases.
+
+The general approach:
+
+```dockerfile
+FROM node:18-slim
+
+# Install Chromium dependencies
+RUN apt-get update && apt-get install -y \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
+    libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
+    libxdamage1 libxfixes3 libxrandr2 libgbm1 \
+    libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+RUN npm install @vakra-dev/reader
+
+# Run as non-root
+RUN useradd -m reader
+USER reader
+
+CMD ["npx", "reader", "start", "--direct-pool-size", "5"]
+```
+
+Verify the exact Dockerfile and configuration against docs.reader.dev/self-hosted before deploying. Container dependencies and startup commands may have been updated since this guide was written.
+
+## Self Hosted vs Cloud: Decision Framework
+
+| Factor | Self Hosted | Cloud (reader.dev) |
+|--------|------------|-------------------|
+| Data sovereignty | Full control, data stays on your network | Data flows through Reader's API |
+| Setup time | Hours to days (provisioning, deps, proxies) | Minutes (sign up, get API key) |
+| Proxy infrastructure | You procure and manage | Included (datacenter + residential) |
+| Maintenance | Your responsibility (updates, monitoring) | Handled by Reader |
+| Scaling | Manual (add servers, load balance) | Automatic |
+| Cost at low volume | Server cost regardless of usage | Free tier (1,000 pages/month) |
+| Cost at high volume | Server + proxy costs (potentially lower) | Per page credits (potentially higher) |
+| Customization | Full source code access | API parameters only |
+| License | Apache 2.0, modify freely | N/A (managed service) |
+
+The managed cloud is the right choice for most teams. Self hosting is the right choice when data sovereignty, regulatory compliance, or extreme volume economics make it necessary.
+
+## Migrating Between Self Hosted and Cloud
+
+The self hosted package (`@vakra-dev/reader`) and cloud SDK (`@vakra-dev/reader-js`) have different APIs, but the underlying behavior is the same. Migration between them is a code change, not an architecture change.
+
+```javascript
+// Self-hosted
+const { Reader } = require('@vakra-dev/reader');
+const reader = new Reader();
+const result = await reader.scrape('https://example.com');
+console.log(result.data[0].markdown);
+
+// Cloud
+const { ReaderClient } = require('@vakra-dev/reader-js');
+const reader = new ReaderClient({ apiKey: 'rdr_...' });
+const result = await reader.read({ url: 'https://example.com' });
+console.log(result.data.markdown);
+```
+
+The output (clean markdown, metadata, extracted data) is identical because both use the same Supermarkdown engine and the same stealth stack.
+
+Reader is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader). The managed cloud platform is at [reader.dev](https://reader.dev) with 1,000 free pages per month. Full documentation is at [docs.reader.dev](https://docs.reader.dev).
+
+## Conclusion
+
+Self hosting Reader gives you complete control over your scraping infrastructure under the Apache 2.0 license. The same engine that powers the managed cloud runs on your servers with no feature gaps. Data never leaves your network. You modify the source code freely.
+
+The operational cost is real: you provision servers, install Chrome dependencies, procure proxies, configure browser pools, monitor health metrics, and maintain the deployment. For teams with data sovereignty requirements, regulatory compliance needs, or high volume economics that justify the operational investment, self hosting is the path that provides full control.
+
+For everyone else, the managed cloud at reader.dev provides the same capabilities with zero operational overhead.

@@ -1,0 +1,301 @@
+---
+title: "Giving AI Agents Real Web Access: Architecture Guide"
+description: "Architect web access for AI agents with the read/research/act pattern, MCP integration, token management, and scraping vs browsing."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Use Cases"
+keywords: ["web access for ai agents", "ai agent architecture", "mcp web scraping", "agent web browsing"]
+schemaType: "article"
+faq:
+  - question: "Do AI agents need a browser for web access?"
+    answer: "Not always. For reading publicly accessible content, scraping (HTTP request + markdown conversion) is faster and cheaper than launching a browser. Agents need a browser only when the task requires authentication, interaction (clicking, typing), or the content renders entirely through JavaScript that scraping cannot handle."
+  - question: "How much context does web content use?"
+    answer: "A typical web page uses 2,000 to 5,000 tokens as clean markdown (after stripping navigation, scripts, and boilerplate). As raw HTML, the same page uses 6,000 to 15,000 tokens. Converting to markdown saves 65 to 85 percent of tokens. Using structured extraction (JSON schema) reduces content to 50 to 200 tokens per page."
+  - question: "Can I give an AI agent access to any website?"
+    answer: "Technically, any publicly accessible page can be scraped or browsed by an agent. Authentication extends this to logged in content. However, some sites restrict automated access through terms of service and anti bot protection. Agent developers are responsible for compliance with applicable laws and site terms."
+  - question: "What is the difference between MCP and function calling?"
+    answer: "MCP is a protocol for connecting AI tools to external capabilities through a standardized server interface. Function calling is a feature of specific LLMs (OpenAI, Anthropic) that lets the model invoke functions defined by the developer. MCP servers expose tools that work across any MCP compatible client. Function calling requires defining tools for each LLM provider separately. Reader's MCP server works with any MCP client. Reader's SDK works with any function calling framework."
+---
+
+AI agents that can only read their training data are limited to what they knew at training time. Agents with web access can check current prices, read documentation, verify facts, fill forms, submit applications, and interact with any web application in real time. The difference between a helpful chatbot and a useful autonomous agent often comes down to whether it can access the live web.
+
+This guide covers the architecture of web access for AI agents: the three patterns (read, research, act), how MCP connects agents to web tools, token management for web content, and how to choose between scraping and browsing for each agent task.
+
+## Three Patterns of Web Access
+
+AI agents interact with the web in three distinct ways. Each pattern has different requirements for speed, depth, and interactivity.
+
+### Pattern 1: Read (Scrape for Context)
+
+The agent needs to read a specific page to answer a question or complete a task. A user asks "what does the pricing page say?" or the agent needs to check a product specification before making a recommendation.
+
+**Characteristics.** Single URL. Fast response needed (the user is waiting). Clean text output (markdown) is better than raw HTML because it uses fewer tokens and is easier for the LLM to process. No interaction required, just reading.
+
+**Implementation.** A scrape call that takes a URL and returns clean markdown. The agent includes the markdown in its context and reasons about it.
+
+```python
+# Agent reads a page for context
+result = client.read(url="https://example.com/pricing")
+context = result.data.markdown
+# Agent now has the pricing page content in its context window
+```
+
+**When to use.** The agent knows which URL to read. The content is publicly accessible. No login, scrolling, or clicking is needed.
+
+### Pattern 2: Research (Crawl for Knowledge)
+
+The agent needs to understand a topic broadly, not just read one page. It needs to crawl documentation, explore a knowledge base, or gather information across multiple pages of a site.
+
+**Characteristics.** Multiple pages from the same domain. Deeper processing (the agent may synthesize information across pages). Clean markdown for each page. The agent may not know which specific pages contain the answer and needs discovery.
+
+**Implementation.** A crawl that discovers and scrapes pages across a domain, returning markdown for each. The agent processes the results to build understanding.
+
+```python
+# Agent researches a topic across a documentation site
+result = client.read(
+    url="https://docs.example.com",
+    max_depth=2,
+    max_pages=20
+)
+# Agent has markdown for up to 20 pages of documentation
+for page in result.data:
+    # Process each page: summarize, extract key info, or index
+    pass
+```
+
+**When to use.** The agent needs comprehensive knowledge about a product, API, or topic. The information is spread across multiple pages. The agent needs to discover which pages are relevant.
+
+### Pattern 3: Act (Browse for Interaction)
+
+The agent needs to interact with a web application: log in to a portal, fill a form, click buttons, navigate a multi step workflow, or extract data from an authenticated session.
+
+**Characteristics.** Real browser required. Session state (cookies, authentication) must persist across steps. The agent may need to make decisions based on what it sees on each page. Speed is secondary to reliability.
+
+**Implementation.** A browser session that the agent drives through CDP (Playwright or Puppeteer). The agent navigates, interacts, and extracts data from the live page.
+
+```python
+# Agent interacts with a web application
+session = client.sessions.create()
+browser = chromium.connectOverCDP(session.ws_endpoint)
+page = browser.contexts[0].pages[0]
+
+# Agent drives the browser
+await page.goto("https://portal.example.com/login")
+await page.fill("#email", "agent@example.com")
+await page.fill("#password", credentials.password)
+await page.click("button[type='submit']")
+await page.wait_for_url("**/dashboard")
+
+# Agent reads the authenticated content
+dashboard_content = await page.content()
+```
+
+**When to use.** The target requires authentication. The workflow involves multiple steps (fill form, click submit, wait for result). The content is dynamic and requires JavaScript rendering. The agent needs to interact, not just read.
+
+### Choosing the Right Pattern
+
+| Signal | Pattern | Tool |
+|--------|---------|------|
+| Agent has a specific URL to read | Read | Scrape |
+| Agent needs to understand a topic across a site | Research | Crawl |
+| Agent needs to log in or interact | Act | Browser session |
+| Content is behind a login wall | Act | Browser session |
+| Agent needs structured data from a page | Read + Extract | Scrape with schema |
+| Agent needs to fill a form or submit data | Act | Browser session |
+| User asks "what does this page say" | Read | Scrape |
+| User asks "summarize this documentation" | Research | Crawl |
+| User asks "book a flight" or "submit an application" | Act | Browser session |
+
+Most agent workflows use more than one pattern. An agent might research a topic (crawl), read specific pages for details (scrape), and then act on a web application based on what it learned (browser).
+
+## MCP: Connecting Agents to Web Tools
+
+The Model Context Protocol (MCP) is the standard for connecting AI tools to external capabilities. For web access, MCP lets an AI agent call scraping, crawling, and browsing tools directly from within its reasoning loop.
+
+### How MCP Works for Web Access
+
+An MCP server exposes tools that the AI can call. Reader's MCP server exposes 9 tools:
+
+**reader_scrape** - Scrape a single URL to clean markdown. The read pattern.
+**reader_batch_scrape** - Scrape multiple URLs in parallel. Batch read.
+**reader_crawl** - Crawl a domain with depth and page limits. The research pattern.
+**reader_discover** - Discover URLs on a domain without scraping content. Lightweight research.
+**reader_extract** - Extract structured JSON from a URL using a schema. Typed read.
+**reader_session_create** - Create a stealth browser session. Start the act pattern.
+**reader_job_status** - Check the status of async crawl or batch jobs.
+**reader_cancel_job** - Cancel a running job.
+**reader_credits** - Check remaining API credits.
+
+### Installing the MCP Server
+
+```bash
+# Claude Code
+claude mcp add reader -- npx -y @vakra-dev/reader-mcp
+
+# Cursor / VS Code (settings.json)
+{
+  "mcpServers": {
+    "reader": {
+      "command": "npx",
+      "args": ["-y", "@vakra-dev/reader-mcp"],
+      "env": { "READER_API_KEY": "rdr_your_api_key" }
+    }
+  }
+}
+```
+
+Once installed, the AI assistant can call these tools within its reasoning. When a user asks "what does example.com say about pricing," the agent calls `reader_scrape` with the URL, gets clean markdown back, and reasons about the content. No custom code required from the user.
+
+### MCP vs Custom Tool Definitions
+
+MCP is a protocol, not a specific implementation. You can also connect agents to web tools through custom function definitions in LangChain, CrewAI, LlamaIndex, or direct API calls. MCP's advantage is standardization: one server works across every MCP compatible client.
+
+The tradeoff is that MCP is currently limited to specific AI tools (Claude Code, Cursor, VS Code, Windsurf). For agent frameworks like LangChain or CrewAI, you use their native tool/function calling mechanisms. Reader's SDKs work in both contexts.
+
+## Token Management for Web Content
+
+Web pages are large. A typical article is 3,000 words. A documentation page might be 5,000 words. A product page with reviews could be 10,000 words. Context windows are finite. Managing how much web content enters the agent's context is a critical architecture decision.
+
+### Raw HTML vs Clean Markdown
+
+The most impactful token optimization is converting HTML to clean markdown before it enters the context. A typical 3,000 word article uses roughly 8,000 tokens as raw HTML but only 2,800 tokens as clean markdown. That is a 65 percent reduction. Navigation bars, scripts, stylesheets, ads, tracking pixels, cookie banners, and footer links are stripped. Only the content remains.
+
+This is why Reader returns markdown by default. Every token saved on web content is a token available for the agent's reasoning, conversation history, or additional context.
+
+### Content Truncation Strategies
+
+When a full page is too large for the context, truncate intelligently:
+
+**First N characters.** Simple but often cuts off important content. Works for pages where the key information is at the top (news articles, product descriptions).
+
+**Heading based extraction.** Extract only the content under specific headings that match the agent's task. If the agent needs pricing, extract only the section under the "Pricing" heading.
+
+**Summary first.** Have the agent summarize the page in a first pass (using a shorter context), then use the summary for reasoning. This costs an extra LLM call but preserves the full page's information in compressed form.
+
+**Extract then reason.** Use Reader's extract capability to pull specific fields as JSON. The JSON is much smaller than the full markdown. The agent reasons about the structured data, not the full page.
+
+```python
+# Instead of sending 5,000 tokens of markdown
+result = client.read(
+    url="https://example.com/product/123",
+    extract={
+        "schema": {
+            "name": "string",
+            "price": "number",
+            "features": ["string"],
+            "in_stock": "boolean"
+        }
+    }
+)
+# Send 50 tokens of structured JSON
+agent_context = result.data.extracted
+```
+
+### Crawl Results Management
+
+Crawling returns markdown for every discovered page. For a 100 page crawl, that could be 500,000 tokens of content, far more than any context window can hold. Strategies:
+
+**Summarize each page.** Process crawl results through a summarization step. Each page becomes a 100 to 200 word summary. 100 summaries fit in a context window.
+
+**Index and retrieve.** Store crawl results in a vector database. When the agent needs information, it retrieves the most relevant chunks. This is the [RAG pipeline](/blog/building-rag-pipeline-live-web-data) pattern.
+
+**Discover then read.** Use crawl in discover mode (scrape: false) to get a list of URLs without content. The agent scans the URL list, identifies the most relevant pages, and scrapes only those. This reduces the content volume by 80 to 90 percent.
+
+```python
+# Step 1: Discover URLs (1 credit flat, no content)
+urls_result = client.read(
+    url="https://docs.example.com",
+    max_depth=2,
+    max_pages=100,
+    scrape=False  # discover only
+)
+
+# Step 2: Agent picks the 5 most relevant URLs
+relevant_urls = agent.select_relevant(urls_result.data, task)
+
+# Step 3: Scrape only those
+for url in relevant_urls:
+    content = client.read(url=url)
+    agent.add_context(content.data.markdown)
+```
+
+## Architecture Patterns
+
+### Simple Agent: Read on Demand
+
+The simplest architecture. The agent scrapes pages as needed during its reasoning loop. No persistent storage, no pre processing.
+
+```
+User query -> Agent reasons -> Agent calls reader_scrape -> Markdown in context -> Agent responds
+```
+
+**Best for:** Chatbots that answer questions about specific URLs. Agents that verify facts or check current information. Simple workflows with one or two web reads per task.
+
+### Research Agent: Crawl Then Reason
+
+The agent crawls a domain to build knowledge, then reasons about the collected information.
+
+```
+User query -> Agent calls reader_crawl -> Multiple pages of markdown ->
+Agent summarizes/indexes -> Agent reasons across pages -> Agent responds
+```
+
+**Best for:** Documentation Q&A. Competitive analysis (crawl competitor sites, compare). Content gap analysis (crawl two sites, find differences).
+
+### Action Agent: Browse and Interact
+
+The agent drives a browser to complete tasks that require interaction.
+
+```
+User query -> Agent creates browser session -> Agent navigates and interacts ->
+Agent reads page content -> Agent decides next action -> Agent completes task -> Agent responds
+```
+
+**Best for:** Form filling. Authenticated data extraction. Multi step workflows (book travel, submit applications, manage accounts).
+
+### Hybrid Agent: Read + Research + Act
+
+The most capable architecture combines all three patterns. The agent chooses which pattern to use based on the task.
+
+```
+User query -> Agent assesses task ->
+  If reading: reader_scrape
+  If researching: reader_crawl -> summarize -> retrieve
+  If acting: reader_session_create -> browser automation
+-> Agent responds with results
+```
+
+This is the architecture that [MCP](/blog/connect-reader-ai-agent-mcp) enables naturally. The agent has all 9 Reader tools available and selects the right one based on the task requirements.
+
+## When to Scrape vs When to Browse
+
+The decision between scraping (fast, cheap, read only) and browsing (slow, expensive, interactive) depends on three factors.
+
+### Authentication Required?
+
+If the content is behind a login, you need a browser session. Scraping cannot authenticate. Browser sessions maintain cookies and session state across navigation.
+
+### Interaction Required?
+
+If the task involves clicking, typing, scrolling, or submitting, you need a browser. Scraping is read only. Browser sessions support full interaction.
+
+### Speed vs Depth?
+
+Scraping is 10 to 100 times faster than browsing. A scrape returns in 1 to 5 seconds. A browser workflow takes 10 to 60 seconds. If the agent needs to check 50 URLs quickly, scraping is the right tool. If the agent needs to navigate a 5 step checkout flow, browsing is the right tool.
+
+| Factor | Scrape | Browser |
+|--------|--------|---------|
+| Speed | 1 to 5 seconds | 10 to 60 seconds |
+| Cost | 1 credit/page | 1 credit/minute |
+| Authentication | No | Yes |
+| Interaction | Read only | Full (click, type, scroll) |
+| JavaScript rendering | Yes (managed) | Yes (raw CDP) |
+| Best for | Reading content | Interacting with applications |
+
+## Conclusion
+
+Web access transforms AI agents from knowledge retrievers into autonomous actors. The architecture comes down to three patterns: read (scrape a page for context), research (crawl a domain for knowledge), and act (browse for interaction). MCP connects these capabilities to AI tools through a standard protocol.
+
+The most effective agent architectures use all three patterns, selecting the right one based on the task. Reader provides all three through a single API and MCP server: scrape for reading, crawl for research, browser sessions for action. The agent gets the right web access for each task without integrating multiple services.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader). Install the MCP server with `claude mcp add reader -- npx -y @vakra-dev/reader-mcp`.

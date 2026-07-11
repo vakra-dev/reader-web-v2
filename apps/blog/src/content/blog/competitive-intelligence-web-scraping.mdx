@@ -1,0 +1,451 @@
+---
+title: "Competitive Intelligence with Web Scraping (2026)"
+description: "Monitor competitor websites for pricing, features, content, and hiring signals using web scraping with change detection and LLM analysis."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Use Cases"
+keywords: ["competitive intelligence scraping", "competitor monitoring", "website change monitoring", "competitive analysis"]
+schemaType: "article"
+faq:
+  - question: "How many competitors should I monitor?"
+    answer: "Start with 3 to 5 direct competitors. Monitor their highest signal pages: pricing, homepage, features, and careers. Expand to 10 to 15 competitors and deeper page coverage after the pipeline is running and the team is acting on the intelligence."
+  - question: "How often should I scrape competitor sites?"
+    answer: "Daily for pricing and careers pages (changes are infrequent but high signal). Weekly for blog and content (captures publishing patterns). Monthly for deep crawls of the full site (discovers structural changes and new sections). Adjust based on how frequently your specific competitors update."
+  - question: "Can I use LLMs to analyze competitor changes?"
+    answer: "Yes. Send the diff (added and removed lines) to an LLM with a prompt asking for strategic interpretation. The LLM turns raw data into actionable insights. This is the highest value step in the pipeline because it transforms '50 lines changed on the pricing page' into 'they eliminated their free tier and added usage based pricing, suggesting a shift toward enterprise monetization.'"
+---
+
+Your competitors update their websites constantly. New features on the pricing page. Revised positioning on the homepage. Job postings that reveal strategic priorities. Product launches buried in a changelog. Blog posts that target your keywords. Each change is a signal, and the companies that detect these signals first have an advantage.
+
+Manual competitor monitoring does not scale. Checking 10 competitor websites daily takes hours. Detecting subtle copy changes or new pages requires comparing current content against previous snapshots, which is impractical by hand. Automated web scraping turns competitor websites into a continuous intelligence feed.
+
+This guide covers what to monitor, how to build a change detection pipeline, how to use LLMs for automated analysis, and how Reader provides the scraping infrastructure.
+
+## What to Monitor
+
+Competitor websites contain several categories of intelligence. Each requires different scraping approaches.
+
+### Pricing and Packaging
+
+The highest value intelligence. Pricing pages reveal plan names, feature tiers, price points, billing options (monthly vs annual), enterprise pricing signals (contact sales), and free tier limits. Monitor for plan restructuring, price increases, new tiers, feature migration between plans, and discount patterns.
+
+### Product and Features
+
+Product pages, feature lists, documentation, and changelogs reveal the competitor's development velocity and direction. New features signal where they are investing. Deprecated features signal what they are abandoning. Integration pages show which ecosystems they are targeting.
+
+### Marketing and Positioning
+
+Homepage hero copy, taglines, value propositions, and comparison pages reveal how competitors position themselves and who they target. Changes in positioning often precede strategic shifts: a competitor changing from "for developers" to "for teams" signals an upmarket move.
+
+### Content Strategy
+
+Blog frequency, topics, keywords targeted, content depth, and SEO patterns reveal their content marketing strategy. If a competitor starts publishing articles targeting your keywords, they are coming for your organic traffic.
+
+### Hiring and Team
+
+Job postings reveal strategic priorities more reliably than any press release. A competitor hiring 5 machine learning engineers signals an AI investment. Hiring a VP of Enterprise Sales signals an upmarket move. Job descriptions reveal technology stacks, team sizes, and organizational structure.
+
+### Technical Infrastructure
+
+Technology stack changes (visible through source inspection), API documentation updates, SDK releases, and open source activity signal technical direction. A competitor migrating from REST to GraphQL or adding WebSocket support reveals infrastructure priorities.
+
+## Building a Competitor Monitoring Pipeline
+
+### Step 1: Define Your Monitoring Targets
+
+```python
+competitors = [
+    {
+        "name": "Competitor A",
+        "domain": "competitor-a.com",
+        "pages": {
+            "pricing": "/pricing",
+            "features": "/features",
+            "homepage": "/",
+            "blog": "/blog",
+            "careers": "/careers",
+            "changelog": "/changelog",
+        },
+    },
+    {
+        "name": "Competitor B",
+        "domain": "competitor-b.com",
+        "pages": {
+            "pricing": "/pricing",
+            "features": "/product",
+            "homepage": "/",
+            "blog": "/resources/blog",
+            "careers": "/company/careers",
+        },
+    },
+]
+```
+
+Start with 3 to 5 competitors and the pages most relevant to your strategy. Expand as the system proves value.
+
+### Step 2: Scrape and Store Snapshots
+
+```python
+from reader_py import ReaderClient
+from datetime import datetime
+import json
+import os
+
+client = ReaderClient(api_key="rdr_your_api_key")
+
+def scrape_competitor(competitor):
+    snapshot = {
+        "name": competitor["name"],
+        "domain": competitor["domain"],
+        "scraped_at": datetime.utcnow().isoformat(),
+        "pages": {},
+    }
+
+    for page_name, path in competitor["pages"].items():
+        url = f"https://{competitor['domain']}{path}"
+        try:
+            result = client.read(url=url)
+            snapshot["pages"][page_name] = {
+                "url": url,
+                "markdown": result.data.markdown,
+                "title": result.data.metadata.title,
+            }
+            print(f"  Scraped {page_name}: {len(result.data.markdown)} chars")
+        except Exception as e:
+            print(f"  Failed {page_name}: {e}")
+            snapshot["pages"][page_name] = None
+
+    return snapshot
+
+# Scrape all competitors
+snapshots = []
+for competitor in competitors:
+    print(f"\nScraping {competitor['name']}...")
+    snapshot = scrape_competitor(competitor)
+    snapshots.append(snapshot)
+
+# Save snapshot
+date_str = datetime.utcnow().strftime("%Y-%m-%d")
+os.makedirs("snapshots", exist_ok=True)
+with open(f"snapshots/{date_str}.json", "w", encoding="utf-8") as f:
+    json.dump(snapshots, f, indent=2, ensure_ascii=False)
+```
+
+Reader returns clean markdown, which is ideal for change detection because structural elements (headings, lists, tables) are preserved as text rather than HTML tags. Comparing markdown diffs is cleaner and more meaningful than comparing raw HTML diffs.
+
+### Step 3: Detect Changes
+
+Compare today's snapshot with the previous snapshot to identify what changed.
+
+```python
+import difflib
+
+def load_snapshot(filepath):
+    with open(filepath, "r") as f:
+        return json.load(f)
+
+def detect_changes(current_snapshots, previous_snapshots):
+    changes = []
+
+    for current in current_snapshots:
+        # Find matching competitor in previous snapshot
+        previous = next(
+            (p for p in previous_snapshots
+             if p["name"] == current["name"]),
+            None
+        )
+        if not previous:
+            continue
+
+        for page_name, current_page in current["pages"].items():
+            if current_page is None:
+                continue
+
+            previous_page = previous.get("pages", {}).get(page_name)
+            if previous_page is None:
+                changes.append({
+                    "competitor": current["name"],
+                    "page": page_name,
+                    "type": "new_page",
+                    "summary": f"New page detected: {page_name}",
+                })
+                continue
+
+            current_md = current_page["markdown"]
+            previous_md = previous_page["markdown"]
+
+            if current_md == previous_md:
+                continue
+
+            # Calculate diff
+            diff = list(difflib.unified_diff(
+                previous_md.splitlines(),
+                current_md.splitlines(),
+                lineterm="",
+                n=3,
+            ))
+
+            if diff:
+                added = [l[1:] for l in diff if l.startswith("+")
+                         and not l.startswith("+++")]
+                removed = [l[1:] for l in diff if l.startswith("-")
+                           and not l.startswith("---")]
+
+                changes.append({
+                    "competitor": current["name"],
+                    "page": page_name,
+                    "type": "content_change",
+                    "lines_added": len(added),
+                    "lines_removed": len(removed),
+                    "added_preview": "\n".join(added[:10]),
+                    "removed_preview": "\n".join(removed[:10]),
+                })
+
+    return changes
+
+# Compare with yesterday
+previous = load_snapshot("snapshots/2026-07-09.json")
+changes = detect_changes(snapshots, previous)
+
+for change in changes:
+    print(f"\n{'='*60}")
+    print(f"{change['competitor']} - {change['page']}")
+    print(f"Type: {change['type']}")
+    if change["type"] == "content_change":
+        print(f"Lines added: {change['lines_added']}")
+        print(f"Lines removed: {change['lines_removed']}")
+        if change["added_preview"]:
+            print(f"\nAdded:\n{change['added_preview'][:300]}")
+```
+
+### Step 4: LLM Analysis of Changes
+
+Raw diffs tell you what changed. An LLM tells you what the change means.
+
+```python
+import anthropic
+
+llm_client = anthropic.Anthropic()
+
+def analyze_change(change):
+    if change["type"] == "new_page":
+        prompt = (f"{change['competitor']} added a new "
+                  f"{change['page']} page. What might this signal?")
+    else:
+        prompt = f"""Analyze this change to {change['competitor']}'s {change['page']} page.
+
+Lines added:
+{change.get('added_preview', 'None')}
+
+Lines removed:
+{change.get('removed_preview', 'None')}
+
+What does this change likely mean for their strategy? 
+Be specific and concise (2-3 sentences)."""
+
+    response = llm_client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=300,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    return response.content[0].text
+
+# Analyze significant changes
+for change in changes:
+    if (change["type"] == "content_change"
+        and change["lines_added"] + change["lines_removed"] > 5):
+        analysis = analyze_change(change)
+        print(f"\n{change['competitor']} - {change['page']}:")
+        print(f"Analysis: {analysis}")
+```
+
+LLM analysis transforms raw data into actionable intelligence. Instead of reading 50 lines of diff, your team gets "Competitor A removed their free tier from the pricing page and added a 'Contact Sales' button, suggesting an upmarket shift toward enterprise customers."
+
+### Step 5: Crawl for Deeper Intelligence
+
+For comprehensive monitoring, crawl the competitor's entire site rather than specific pages. This discovers new pages, blog posts, and content that targeted page monitoring would miss.
+
+```python
+def deep_crawl_competitor(competitor):
+    result = client.read(
+        url=f"https://{competitor['domain']}",
+        max_depth=2,
+        max_pages=50,
+    )
+
+    pages = []
+    for page in result.data:
+        pages.append({
+            "url": page.url,
+            "markdown": page.markdown,
+            "title": page.metadata.title if page.metadata else "",
+        })
+
+    return pages
+
+# Weekly deep crawl
+for competitor in competitors:
+    print(f"\nDeep crawling {competitor['name']}...")
+    pages = deep_crawl_competitor(competitor)
+    print(f"  Discovered {len(pages)} pages")
+
+    # Compare discovered URLs with previous crawl
+    # to find new pages
+```
+
+Deep crawls run weekly or monthly rather than daily because they consume more credits and the full site structure changes less frequently than individual high value pages.
+
+## Monitoring Specific Intelligence Categories
+
+### Pricing Changes
+
+Extract structured pricing data for precise comparison:
+
+```python
+pricing_result = client.read(
+    url="https://competitor-a.com/pricing",
+    extract={
+        "schema": {
+            "plans": [{
+                "name": "string",
+                "price_monthly": "number",
+                "price_annual": "number",
+                "features": ["string"],
+            }],
+            "has_free_tier": "boolean",
+            "has_enterprise_plan": "boolean",
+        }
+    }
+)
+
+plans = pricing_result.data.extracted
+print(json.dumps(plans, indent=2))
+```
+
+Store the structured pricing data alongside the markdown snapshot. Compare structured data for precise detection (price changed from $29 to $39) and markdown for qualitative changes (new testimonial added, feature list reordered).
+
+### Blog and Content Monitoring
+
+Monitor competitor content strategy by tracking their blog:
+
+```python
+blog_result = client.read(
+    url="https://competitor-a.com/blog",
+    max_depth=1,
+    max_pages=20,
+)
+
+# Extract titles and dates from blog index
+recent_posts = []
+for page in blog_result.data:
+    if "/blog/" in page.url and page.url != "https://competitor-a.com/blog":
+        recent_posts.append({
+            "url": page.url,
+            "title": page.metadata.title if page.metadata else "",
+            "content_length": len(page.markdown),
+        })
+
+print(f"Found {len(recent_posts)} blog posts")
+for post in recent_posts[:5]:
+    print(f"  {post['title']} ({post['content_length']} chars)")
+```
+
+Track publishing frequency (are they accelerating?), topic distribution (are they targeting new keywords?), and content depth (are they investing in long form content?).
+
+### Hiring Signal Extraction
+
+```python
+careers_result = client.read(
+    url="https://competitor-a.com/careers",
+    extract={
+        "schema": {
+            "open_positions": [{
+                "title": "string",
+                "department": "string",
+                "location": "string",
+            }]
+        }
+    }
+)
+
+positions = careers_result.data.extracted.get("open_positions", [])
+print(f"Open positions: {len(positions)}")
+
+# Group by department
+from collections import Counter
+dept_counts = Counter(p.get("department", "Unknown") for p in positions)
+for dept, count in dept_counts.most_common():
+    print(f"  {dept}: {count} openings")
+```
+
+A sudden spike in engineering hiring signals product investment. New sales or marketing roles signal go to market expansion. Leadership hires (VP, C-level) signal strategic shifts.
+
+## Automating the Pipeline
+
+Run the full pipeline on a schedule:
+
+```python
+import schedule
+import time
+
+def daily_monitor():
+    print(f"\n{'='*60}")
+    print(f"Running competitive intelligence - {datetime.utcnow()}")
+
+    # Scrape all competitors
+    snapshots = [scrape_competitor(c) for c in competitors]
+
+    # Load previous snapshot
+    yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+    try:
+        previous = load_snapshot(f"snapshots/{yesterday}.json")
+    except FileNotFoundError:
+        previous = []
+
+    # Detect and analyze changes
+    changes = detect_changes(snapshots, previous)
+
+    significant = [c for c in changes
+                   if c["type"] == "new_page"
+                   or c.get("lines_added", 0) + c.get("lines_removed", 0) > 5]
+
+    if significant:
+        for change in significant:
+            analysis = analyze_change(change)
+            send_to_slack(change, analysis)
+        print(f"Sent {len(significant)} alerts")
+    else:
+        print("No significant changes detected")
+
+    # Save snapshot
+    save_snapshot(snapshots)
+
+schedule.every().day.at("07:00").do(daily_monitor)
+
+while True:
+    schedule.run_pending()
+    time.sleep(60)
+```
+
+## Practical Tips
+
+**Start narrow.** Monitor 3 competitors and 3 pages each (pricing, homepage, careers). Expand after the pipeline proves value. Monitoring everything from day one creates noise.
+
+**Focus on high signal pages.** Pricing and careers pages change less frequently but each change carries more strategic weight than a blog post update.
+
+**Normalize markdown before comparing.** Strip trailing whitespace, normalize unicode, and collapse multiple newlines to reduce false positive diffs from formatting changes.
+
+**Set change thresholds.** Not every edit is worth alerting on. A single typo fix on a pricing page is noise. A 50 line rewrite of the value proposition is signal. Filter changes by magnitude before alerting.
+
+**Archive everything.** Store every snapshot. Historical data enables trend analysis that point in time monitoring cannot provide. Disk is cheap; intelligence is expensive.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## Conclusion
+
+Competitive intelligence through web scraping turns competitor websites into a continuous data feed. Daily monitoring of pricing, features, content, and hiring signals detects strategic shifts that manual research misses.
+
+The most effective pipeline scrapes key pages daily, detects meaningful changes through markdown diffing, uses an LLM to analyze what changes mean strategically, and sends alerts to the team through Slack or email. Weekly deep crawls catch new pages and content that targeted monitoring misses.
+
+Reader's markdown output is particularly well suited for competitive intelligence because markdown diffs are clean and semantically meaningful. Comparing markdown shows "they added a new pricing tier" rather than "they changed 47 HTML attributes and 12 CSS classes."

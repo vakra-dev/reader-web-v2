@@ -1,0 +1,474 @@
+---
+title: "How to Scrape Indeed Job Listings with Python (2026)"
+description: "Learn how to scrape Indeed for job titles, companies, salaries, and descriptions using Python. Covers Cloudflare bypass, pagination, and managed scraping."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Guides"
+keywords: ["scrape indeed", "indeed scraper", "job listing scraper", "indeed data extraction"]
+schemaType: "howto"
+faq:
+  - question: "How do I handle Cloudflare on Indeed?"
+    answer: "Indeed uses Cloudflare's JavaScript challenge, which blocks all static HTTP requests. You need a real browser (Playwright, Puppeteer) or a managed scraping API like Reader that handles Cloudflare bypass automatically. Simple header manipulation and basic proxy rotation alone are not sufficient against Cloudflare's TLS fingerprinting and JavaScript verification."
+  - question: "Can I get Indeed data through an API?"
+    answer: "Yes. Indeed offers publisher APIs and data partnerships for programmatic job data access. The Indeed Publisher Program provides structured listing data for qualified partners. These official channels provide reliable access without the technical challenges of scraping."
+  - question: "How do I scrape only recent Indeed listings?"
+    answer: "Use the fromage URL parameter to filter by posting age. fromage=1 shows jobs posted in the last 24 hours. fromage=3 shows the last 3 days. fromage=7 shows the last week. This reduces the volume of pages to scrape and ensures you collect current listings."
+---
+
+Indeed is the largest job aggregator in the world, with millions of job listings across every industry and location. Scraping Indeed provides data for job market analysis, salary benchmarking, recruitment automation, talent intelligence, and building job aggregation platforms. The available data includes job titles, company names, locations, salary ranges, job descriptions, posting dates, job types, and application requirements.
+
+This guide covers Indeed's page structure, the specific anti bot challenges you will encounter, how to approach scraping with Python, pagination handling, and how Reader simplifies the process.
+
+## What Data Indeed Contains
+
+### Search Results Pages
+
+Indeed search results display job cards in a scrollable list. Each card contains the job title (clickable, links to full listing), company name, location (city, state, or "Remote"), salary range (when the employer provides it, roughly 40% of listings), a 2 to 3 line snippet from the job description, posting date ("Just posted," "1 day ago," "7 days ago," "30+ days ago"), job type tags (Full time, Part time, Contract, Temporary), and whether the listing is sponsored (paid placement).
+
+Some cards also show company ratings (1 to 5 stars from Indeed reviews), benefits highlights (health insurance, 401k, PTO), and an "Easily apply" badge indicating simplified application.
+
+### Job Detail Pages
+
+Clicking a job card opens the full listing. Depending on the listing type, this either opens in a side panel on the same page or navigates to a dedicated page. The full listing includes the complete job description (responsibilities, requirements, qualifications), required and preferred skills, education requirements, experience level, full benefits list, company information (size, industry, headquarters), and direct application link or instructions.
+
+### URL Structure
+
+Indeed uses query parameters for search:
+
+```
+https://www.indeed.com/jobs?q=python+developer&l=New+York&start=0
+```
+
+Parameters:
+- `q` - search query (job title, keywords, company)
+- `l` - location (city, state, zip code, or "remote")
+- `start` - pagination offset (0, 10, 20, 30...)
+- `sc` - additional filters (salary, job type, experience level)
+- `fromage` - posting age filter (1, 3, 7, 14 days)
+- `salary` - minimum salary filter
+
+Each page shows 10 or 15 results by default. The `start` parameter increments by 10 for each subsequent page.
+
+## Why Scraping Indeed Is Hard
+
+### Cloudflare Protection
+
+Indeed uses Cloudflare for [anti bot protection](/blog/anti-bot-detection). Requests from non browser clients are challenged or blocked immediately. Python's requests library produces a non browser TLS fingerprint that [Cloudflare detects](/blog/bypass-cloudflare) regardless of what User Agent you set. You get a Cloudflare challenge page (JavaScript challenge, Turnstile, or managed challenge) instead of job listings.
+
+This means static HTTP libraries (requests, httpx, urllib) cannot scrape Indeed. You need a real browser or a managed scraping service that handles Cloudflare bypass.
+
+### Behavioral Detection
+
+Beyond Cloudflare, Indeed monitors request patterns for signs of automation. Scraping too many pages too quickly, accessing pages in a strictly sequential pattern (start=0, then start=10, then start=20 with consistent timing), or making requests without natural browsing signals (no mouse events, no scroll behavior) triggers additional blocks.
+
+Indeed also uses dynamic session tokens and cookies that must be maintained across requests. Dropping cookies between requests is a bot signal.
+
+### Dynamic Class Names
+
+Indeed uses build generated CSS class names that change between deployments. Class names like `jobTitle-color-purple` or `css-1q3bp5p` are not stable across time. Building selectors on these class names results in scrapers that break within weeks.
+
+More stable selector strategies use `data-testid` attributes (Indeed uses these for their own testing), ARIA attributes, element structure and hierarchy, and semantic HTML elements.
+
+### Rate Limiting
+
+Indeed limits the number of requests per time window. Exceeding the limit results in temporary blocks (HTTP 429), extended Cloudflare challenges, or IP bans. The exact thresholds are not published and vary based on IP reputation.
+
+## Method 1: requests and BeautifulSoup
+
+This approach demonstrates the concept but is blocked by Cloudflare on virtually every request. It is included for educational purposes.
+
+```python
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urlencode
+
+params = {
+    "q": "python developer",
+    "l": "New York, NY",
+    "start": 0,
+}
+
+url = f"https://www.indeed.com/jobs?{urlencode(params)}"
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/126.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,"
+              "application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+}
+
+response = requests.get(url, headers=headers)
+
+if response.status_code == 200:
+    soup = BeautifulSoup(response.text, "lxml")
+
+    # Check if we got actual content or a Cloudflare page
+    if soup.find("div", id="challenge-running"):
+        print("Cloudflare challenge page received. Cannot proceed.")
+    else:
+        jobs = soup.find_all("div", class_="job_seen_beacon")
+        for job in jobs:
+            title = job.find("h2", class_="jobTitle")
+            company = job.find("span", attrs={"data-testid": "company-name"})
+            location = job.find("div", attrs={"data-testid": "text-location"})
+
+            print(f"{title.text.strip() if title else 'N/A'} "
+                  f"at {company.text.strip() if company else 'N/A'} "
+                  f"({location.text.strip() if location else 'N/A'})")
+else:
+    print(f"Blocked: HTTP {response.status_code}")
+```
+
+In practice, this returns the Cloudflare challenge page, not job data. The `data-testid` attributes (`company-name`, `text-location`) are shown here because they are the most stable selectors when you do get through with a browser, but requests alone will not get past Cloudflare.
+
+## Method 2: Playwright
+
+Playwright launches real Chromium that produces authentic TLS fingerprints and can execute Cloudflare's JavaScript challenges. With stealth patches, it has a reasonable success rate on Indeed.
+
+### Scraping Search Results
+
+```python
+from playwright.sync_api import sync_playwright
+import time
+import random
+import json
+
+def scrape_indeed(query, location, max_pages=5):
+    all_jobs = []
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-features=IsolateOrigins,site-per-process",
+            ]
+        )
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/126.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080},
+            locale="en-US",
+        )
+
+        # Patch navigator.webdriver
+        context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined,
+            });
+        """)
+
+        page = context.new_page()
+
+        for page_num in range(max_pages):
+            offset = page_num * 10
+            url = (f"https://www.indeed.com/jobs?"
+                   f"q={query.replace(' ', '+')}"
+                   f"&l={location.replace(' ', '+')}"
+                   f"&start={offset}")
+
+            page.goto(url)
+
+            # Wait for job cards or Cloudflare challenge
+            try:
+                page.wait_for_selector(
+                    "div.job_seen_beacon, div#challenge-running",
+                    timeout=15000
+                )
+            except:
+                print(f"Timeout on page {page_num + 1}")
+                page.screenshot(path=f"indeed_timeout_{page_num}.png")
+                break
+
+            # Check for Cloudflare
+            if page.query_selector("div#challenge-running"):
+                print("Cloudflare challenge. Waiting...")
+                time.sleep(10)
+                # Check again after waiting
+                if page.query_selector("div#challenge-running"):
+                    print("Still blocked. Stopping.")
+                    page.screenshot(path="indeed_blocked.png")
+                    break
+
+            # Random delay to appear human
+            time.sleep(random.uniform(2, 4))
+
+            # Extract job data
+            jobs = page.evaluate("""
+                () => {
+                    const cards = document.querySelectorAll(
+                        'div.job_seen_beacon'
+                    );
+                    return Array.from(cards).map(card => {
+                        const title = card.querySelector(
+                            'h2.jobTitle a span'
+                        );
+                        const company = card.querySelector(
+                            '[data-testid="company-name"]'
+                        );
+                        const location = card.querySelector(
+                            '[data-testid="text-location"]'
+                        );
+                        const salary = card.querySelector(
+                            '[data-testid="attribute_snippet_testid"]'
+                        );
+                        const snippet = card.querySelector(
+                            '.underShelfFooter .heading6'
+                        );
+                        const dateEl = card.querySelector(
+                            '.date'
+                        );
+                        const link = card.querySelector(
+                            'h2.jobTitle a'
+                        );
+
+                        return {
+                            title: title
+                                ? title.textContent.trim() : '',
+                            company: company
+                                ? company.textContent.trim() : '',
+                            location: location
+                                ? location.textContent.trim() : '',
+                            salary: salary
+                                ? salary.textContent.trim() : '',
+                            snippet: snippet
+                                ? snippet.textContent.trim() : '',
+                            date: dateEl
+                                ? dateEl.textContent.trim() : '',
+                            url: link
+                                ? 'https://www.indeed.com' + link.getAttribute('href')
+                                : '',
+                        };
+                    });
+                }
+            """)
+
+            all_jobs.extend(jobs)
+            print(f"Page {page_num + 1}: {len(jobs)} jobs "
+                  f"(total: {len(all_jobs)})")
+
+            # Longer delay between pages
+            time.sleep(random.uniform(3, 7))
+
+        browser.close()
+
+    return all_jobs
+
+# Usage
+jobs = scrape_indeed("python developer", "New York, NY", max_pages=5)
+for j in jobs[:5]:
+    print(f"\n{j['title']} at {j['company']}")
+    print(f"  {j['location']} | {j['salary']}")
+    print(f"  Posted: {j['date']}")
+```
+
+The `data-testid` attributes (`company-name`, `text-location`, `attribute_snippet_testid`) are the most stable selectors available on Indeed. They are used by Indeed's own testing infrastructure and change less frequently than CSS class names.
+
+### Extracting Full Job Descriptions
+
+To get the complete job description, you need to click on each job card or visit the job URL directly:
+
+```python
+def get_job_details(page, job_url):
+    page.goto(job_url)
+
+    try:
+        page.wait_for_selector(
+            "#jobDescriptionText",
+            timeout=10000
+        )
+    except:
+        return None
+
+    time.sleep(random.uniform(1, 3))
+
+    details = page.evaluate("""
+        () => {
+            const description = document.querySelector(
+                '#jobDescriptionText'
+            );
+            const jobType = document.querySelector(
+                '[data-testid="job-type"]'
+            );
+            const benefits = document.querySelectorAll(
+                '[data-testid="benefits-item"]'
+            );
+
+            return {
+                description: description
+                    ? description.textContent.trim() : '',
+                job_type: jobType
+                    ? jobType.textContent.trim() : '',
+                benefits: Array.from(benefits)
+                    .map(b => b.textContent.trim()),
+            };
+        }
+    """)
+
+    return details
+```
+
+The `#jobDescriptionText` ID is one of the most stable selectors on Indeed. It has remained consistent for years because Indeed uses it for their own analytics tracking.
+
+### Filtering by Posting Date
+
+To focus on recent listings, use the `fromage` parameter:
+
+```python
+# Only jobs posted in the last 3 days
+url = (f"https://www.indeed.com/jobs?"
+       f"q=python+developer&l=New+York&fromage=3")
+
+# Only jobs posted in the last 24 hours
+url = (f"https://www.indeed.com/jobs?"
+       f"q=python+developer&l=New+York&fromage=1")
+```
+
+This reduces the number of pages to scrape and ensures you are getting current listings rather than stale postings.
+
+## Using Reader
+
+Reader handles [Cloudflare bypass](/blog/bypass-cloudflare), JavaScript rendering, and content extraction in a single API call. The stealth stack uses Playwright with fingerprint-generator for browser fingerprint generation, identity randomization, and proxy rotation to handle Indeed's JavaScript challenges and behavioral detection.
+
+### Scrape Search Results
+
+```python
+from reader_py import ReaderClient
+
+client = ReaderClient(api_key="rdr_your_api_key")
+
+result = client.read(
+    url="https://www.indeed.com/jobs?q=python+developer&l=New+York"
+)
+print(result.data.markdown)
+```
+
+The output is clean markdown containing the job listings with navigation, ads, sponsored labels, and Indeed interface elements stripped.
+
+### Scrape Multiple Pages
+
+```python
+urls = [
+    f"https://www.indeed.com/jobs?q=python+developer&l=New+York&start={offset}"
+    for offset in range(0, 50, 10)
+]
+
+for url in urls:
+    result = client.read(url=url)
+    print(f"\n--- Offset {url.split('start=')[1]} ---")
+    # First 500 chars of markdown
+    print(result.data.markdown[:500])
+```
+
+### Extract Structured Data
+
+For typed JSON output instead of markdown:
+
+```python
+result = client.read(
+    url="https://www.indeed.com/jobs?q=python+developer&l=New+York",
+    extract={
+        "schema": {
+            "jobs": [{
+                "title": "string",
+                "company": "string",
+                "location": "string",
+                "salary": "string",
+                "date_posted": "string",
+            }]
+        }
+    }
+)
+
+for job in result.data.extracted.get("jobs", []):
+    print(f"{job['title']} at {job['company']} ({job['location']})")
+```
+
+### Browser Session for Full Control
+
+For interactive scraping (clicking job cards, loading full descriptions, handling dynamic elements):
+
+```python
+from playwright.sync_api import sync_playwright
+
+session = client.sessions.create()
+
+with sync_playwright() as p:
+    browser = p.chromium.connect_over_cdp(session.ws_endpoint)
+    page = browser.contexts[0].pages[0]
+
+    page.goto("https://www.indeed.com/jobs?q=python+developer&l=New+York")
+    page.wait_for_selector("div.job_seen_beacon", timeout=15000)
+
+    # Click on individual job cards to load full descriptions
+    cards = page.query_selector_all("div.job_seen_beacon")
+    for card in cards[:5]:
+        card.click()
+        time.sleep(2)
+        description = page.query_selector("#jobDescriptionText")
+        if description:
+            print(f"Description: {description.inner_text()[:200]}...")
+
+    browser.close()
+
+client.sessions.stop(session.session_id)
+```
+
+Reader's browser sessions provide stealth at the engine level (not JavaScript patches) with datacenter and residential proxy pools, making them more reliable against Indeed's Cloudflare configuration than standard Playwright.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month.
+
+## Saving Results
+
+```python
+import csv
+import json
+
+# JSON (preserves all fields including arrays like benefits)
+with open("indeed_jobs.json", "w", encoding="utf-8") as f:
+    json.dump(jobs, f, indent=2, ensure_ascii=False)
+
+# CSV (flat format for spreadsheets and analysis)
+fields = ["title", "company", "location", "salary", "date", "url"]
+with open("indeed_jobs.csv", "w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(jobs)
+
+# JSON Lines (for large datasets, one job per line)
+with open("indeed_jobs.jsonl", "w", encoding="utf-8") as f:
+    for job in jobs:
+        f.write(json.dumps(job, ensure_ascii=False) + "\n")
+
+print(f"Saved {len(jobs)} jobs in 3 formats")
+```
+
+## Legal and Ethical Considerations
+
+Indeed's Terms of Service restrict automated data collection. The legal landscape around job listing scraping has been shaped by several cases.
+
+### Indeed's Position
+
+Indeed's Terms of Service prohibit "automated means, including agents, robots, scripts, or spiders" to access the site. Indeed has sent cease and desist letters and pursued legal action against companies that scraped at scale.
+
+### Legal Context
+
+In the US, the hiQ Labs v. LinkedIn case (which went to the Supreme Court) established that scraping publicly available data does not necessarily violate the Computer Fraud and Abuse Act. However, this ruling addressed LinkedIn specifically, and its applicability to Indeed has not been directly tested. Indeed's Terms of Service are a separate legal consideration from CFAA.
+
+Job posting metadata (titles, company names, locations, salary ranges) is generally considered factual information. Full job descriptions are authored by employers and may have copyright considerations.
+
+### Official Alternatives
+
+Indeed offers APIs and data partnerships for companies that need programmatic access to job data. The Indeed Publisher Program provides access to job listing data for qualified publishers. For production job data collection at scale, these official channels are the recommended approach.
+
+Users are responsible for compliance with applicable laws and site terms of service in their jurisdiction. This guide is educational and does not constitute legal advice.
+
+## Conclusion
+
+Indeed is a valuable source of job market data but is protected by Cloudflare and behavioral detection that make reliable scraping challenging. Static HTTP requests are blocked by Cloudflare's JavaScript challenge. Playwright handles the challenge but gets detected at volume. Reader handles the anti bot complexity through its stealth browser stack and proxy infrastructure.
+
+For production job data collection, evaluate Indeed's official APIs and data partnerships first. When scraping is necessary for research or analysis, use tools with [Cloudflare bypass](/blog/bypass-cloudflare) capabilities, maintain reasonable request rates, use the `fromage` parameter to focus on recent listings, and consult legal counsel for your specific use case.

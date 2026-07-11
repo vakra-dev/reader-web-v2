@@ -1,0 +1,456 @@
+---
+title: "Using Reader with LlamaIndex for Knowledge Bases"
+description: "Learn how to integrate Reader with LlamaIndex to build knowledge bases from web data. Covers custom readers, indexing, query engines, and agentic RAG."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Ecosystem"
+keywords: ["llamaindex web scraping", "reader llamaindex", "llamaindex knowledge base", "web data indexing"]
+schemaType: "article"
+faq:
+  - question: "Does Reader have an official LlamaIndex integration?"
+    answer: "Reader integrates with LlamaIndex through its Python SDK. The custom reader and tool examples in this guide are the recommended integration patterns. LlamaIndex's Reader interface (BaseReader) makes integration straightforward: implement load_data and return Documents."
+  - question: "Which is better for RAG: LlamaIndex or LangChain?"
+    answer: "For pure RAG (indexing, retrieval, question answering), LlamaIndex's purpose built abstractions are more natural. For broader LLM applications that include RAG alongside other capabilities (agents, tools, memory, chains), LangChain is more flexible. Reader works with both. See our LangChain guide for the LangChain integration."
+  - question: "How do I handle large documentation sites?"
+    answer: "Use Reader's discover mode to find URLs (1 credit flat), filter to relevant pages by URL pattern, then batch scrape only those pages. LlamaIndex's ingestion pipeline can process thousands of documents. For very large indexes (50,000+ chunks), use a managed vector store (Pinecone, Weaviate, Qdrant) instead of local ChromaDB."
+  - question: "How often should I re index?"
+    answer: "Weekly for most documentation sites. Daily for fast moving docs or content that changes frequently. LlamaIndex supports incremental updates: compare crawl results with the existing index, embed only new or changed documents, and remove documents for deleted pages."
+---
+
+LlamaIndex is a data framework for building LLM applications over external data. Its core abstraction is the index: a structured representation of your data that enables efficient retrieval and query. Where LangChain is a general purpose LLM application framework, LlamaIndex focuses specifically on connecting LLMs to data sources through indexing, retrieval, and query engines.
+
+Reader provides the web data that feeds into LlamaIndex indexes. Crawl a documentation site, product catalog, or knowledge base with Reader. Index the clean markdown with LlamaIndex. Query the index with natural language. The result is a knowledge base that answers questions from your web data with citations.
+
+This guide shows how to build custom Reader data connectors for LlamaIndex, create web based indexes, build query engines, and set up agentic RAG with live web access.
+
+## Setup
+
+```bash
+pip install llama-index llama-index-llms-anthropic llama-index-embeddings-voyageai
+pip install reader-py chromadb
+```
+
+```python
+import os
+
+os.environ["READER_API_KEY"] = "rdr_your_api_key"
+os.environ["ANTHROPIC_API_KEY"] = "your_anthropic_key"
+os.environ["VOYAGE_API_KEY"] = "your_voyage_key"
+```
+
+## Building a Reader Data Connector
+
+LlamaIndex uses "Readers" (confusingly the same word, different concept) to load data from external sources into `Document` objects. A custom Reader connector wraps Reader's scraping and crawling capabilities.
+
+### Web Page Reader
+
+```python
+from llama_index.core import Document
+from llama_index.core.readers.base import BaseReader
+from reader_py import ReaderClient
+
+class ReaderWebPageReader(BaseReader):
+    """LlamaIndex reader that loads web pages via Reader API."""
+
+    def __init__(self, api_key=None):
+        self.client = ReaderClient(
+            api_key=api_key or os.environ.get("READER_API_KEY")
+        )
+
+    def load_data(self, urls, **kwargs):
+        """Load one or more URLs as LlamaIndex Documents."""
+        if isinstance(urls, str):
+            urls = [urls]
+
+        documents = []
+
+        if len(urls) == 1:
+            result = self.client.read(url=urls[0])
+            documents.append(Document(
+                text=result.data.markdown,
+                metadata={
+                    "source": urls[0],
+                    "title": result.data.metadata.title
+                             if result.data.metadata else "",
+                },
+            ))
+        else:
+            # Batch scrape for multiple URLs
+            result = self.client.read(urls=urls)
+            for page in result.data:
+                documents.append(Document(
+                    text=page.markdown,
+                    metadata={
+                        "source": page.url,
+                        "title": page.metadata.title
+                                 if page.metadata else "",
+                    },
+                ))
+
+        return documents
+
+# Usage
+reader = ReaderWebPageReader()
+docs = reader.load_data([
+    "https://docs.example.com/getting-started",
+    "https://docs.example.com/api-reference",
+    "https://docs.example.com/authentication",
+])
+print(f"Loaded {len(docs)} documents")
+```
+
+Reader returns clean markdown, which is exactly what LlamaIndex expects as the `text` field of a Document. The markdown preserves headings, code blocks, tables, and lists that LlamaIndex's node parsers understand.
+
+### Crawl Reader
+
+```python
+class ReaderCrawlReader(BaseReader):
+    """LlamaIndex reader that crawls a website via Reader API."""
+
+    def __init__(self, api_key=None):
+        self.client = ReaderClient(
+            api_key=api_key or os.environ.get("READER_API_KEY")
+        )
+
+    def load_data(self, url, max_depth=3, max_pages=100, **kwargs):
+        """Crawl a website and return Documents for every page."""
+        result = self.client.read(
+            url=url,
+            max_depth=max_depth,
+            max_pages=max_pages,
+        )
+
+        documents = []
+        for page in result.data:
+            if len(page.markdown) < 100:
+                continue
+
+            documents.append(Document(
+                text=page.markdown,
+                metadata={
+                    "source": page.url,
+                    "title": page.metadata.title
+                             if page.metadata else "",
+                },
+            ))
+
+        return documents
+
+# Crawl an entire documentation site
+crawler = ReaderCrawlReader()
+docs = crawler.load_data(
+    "https://docs.example.com",
+    max_depth=3,
+    max_pages=200,
+)
+print(f"Crawled {len(docs)} pages")
+```
+
+## Building a Knowledge Base Index
+
+LlamaIndex's `VectorStoreIndex` is the most common index type for question answering. It embeds document chunks and stores them for similarity retrieval.
+
+### Parse, Embed, Index
+
+```python
+from llama_index.core import VectorStoreIndex, Settings
+from llama_index.core.node_parser import MarkdownNodeParser
+from llama_index.llms.anthropic import Anthropic
+from llama_index.embeddings.voyageai import VoyageEmbedding
+
+# Configure LLM and embeddings
+Settings.llm = Anthropic(model="claude-sonnet-4-6", temperature=0)
+Settings.embed_model = VoyageEmbedding(
+    model_name="voyage-3",
+    voyage_api_key=os.environ.get("VOYAGE_API_KEY"),
+)
+
+# Use MarkdownNodeParser for markdown-aware chunking
+Settings.node_parser = MarkdownNodeParser()
+
+# Build the index from crawled documents
+index = VectorStoreIndex.from_documents(docs)
+
+print(f"Index created with {len(docs)} documents")
+```
+
+The `MarkdownNodeParser` is the key integration point. It understands markdown structure: it splits on headings, preserves code blocks as atomic units, and keeps lists together. This produces semantically coherent chunks because Reader's markdown output uses standard heading hierarchy.
+
+Compare this to indexing raw HTML, where the node parser would split on arbitrary character boundaries, breaking mid tag, mid attribute, or mid script. Clean markdown eliminates this entire class of chunking problems.
+
+### Persistent Storage with ChromaDB
+
+For production use, persist the index so you do not re embed on every restart:
+
+```python
+import chromadb
+from llama_index.vector_stores.chroma import ChromaVectorStore
+from llama_index.core import StorageContext
+
+# Create persistent ChromaDB
+chroma_client = chromadb.PersistentClient(path="./chroma_db")
+chroma_collection = chroma_client.get_or_create_collection("documentation")
+vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+storage_context = StorageContext.from_defaults(vector_store=vector_store)
+
+# Build index with persistent storage
+index = VectorStoreIndex.from_documents(
+    docs,
+    storage_context=storage_context,
+)
+
+# On subsequent runs, load the existing index
+# index = VectorStoreIndex.from_vector_store(vector_store)
+```
+
+## Querying the Knowledge Base
+
+LlamaIndex provides several query engine types. Each suits different question patterns.
+
+### Basic Query Engine
+
+```python
+query_engine = index.as_query_engine(
+    similarity_top_k=5,
+    response_mode="compact",
+)
+
+response = query_engine.query("How do I authenticate with the API?")
+print(f"Answer: {response}")
+print(f"\nSources:")
+for node in response.source_nodes:
+    print(f"  - {node.metadata.get('source', 'Unknown')} "
+          f"(score: {node.score:.3f})")
+```
+
+The `similarity_top_k=5` retrieves the 5 most relevant chunks. The `response_mode="compact"` concatenates retrieved chunks and generates a single answer. Other modes include `"tree_summarize"` (hierarchical summarization of retrieved content) and `"refine"` (iteratively refines the answer with each chunk).
+
+### Chat Engine for Conversations
+
+```python
+chat_engine = index.as_chat_engine(
+    chat_mode="context",
+    similarity_top_k=5,
+    system_prompt=(
+        "You are a documentation assistant. Answer questions based on "
+        "the documentation you have been given. If the answer is not "
+        "in the documentation, say so. Cite the source page for "
+        "each claim."
+    ),
+)
+
+# Multi-turn conversation
+response = chat_engine.chat("What authentication methods are supported?")
+print(response)
+
+response = chat_engine.chat("How do I use API keys specifically?")
+print(response)
+
+response = chat_engine.chat("Are there rate limits?")
+print(response)
+```
+
+The chat engine maintains conversation history. Follow up questions ("How do I use API keys specifically?") are understood in context without restating the topic. This is a more natural interface for documentation Q&A than single shot queries.
+
+### Sub Question Query Engine
+
+For complex questions that span multiple topics, the sub question engine decomposes the question and queries the index multiple times:
+
+```python
+from llama_index.core.query_engine import SubQuestionQueryEngine
+from llama_index.core.tools import QueryEngineTool, ToolMetadata
+
+# Wrap the index as a tool
+query_engine_tool = QueryEngineTool(
+    query_engine=index.as_query_engine(similarity_top_k=5),
+    metadata=ToolMetadata(
+        name="documentation",
+        description="Documentation for the product API, "
+                    "configuration, and usage guides.",
+    ),
+)
+
+sub_question_engine = SubQuestionQueryEngine.from_defaults(
+    query_engine_tools=[query_engine_tool],
+)
+
+# Complex question that requires multiple retrievals
+response = sub_question_engine.query(
+    "Compare the authentication flow with the rate limiting policy. "
+    "Are authenticated requests treated differently for rate limits?"
+)
+print(response)
+```
+
+The engine breaks this into sub questions ("What is the authentication flow?" and "What is the rate limiting policy?" and "How do rate limits apply to authenticated requests?"), queries the index for each, and synthesizes a combined answer.
+
+## Agentic RAG with Live Web Access
+
+The most powerful pattern combines a pre built index with live web scraping. The agent searches the index first. If the index does not have the answer, it scrapes the live page.
+
+### Building the Agent
+
+```python
+from llama_index.core.agent import ReActAgent
+from llama_index.core.tools import FunctionTool
+
+# Tool 1: Search the documentation index
+doc_query_engine = index.as_query_engine(similarity_top_k=5)
+doc_tool = QueryEngineTool(
+    query_engine=doc_query_engine,
+    metadata=ToolMetadata(
+        name="search_docs",
+        description="Search the documentation index for information. "
+                    "Use this first before checking the live web.",
+    ),
+)
+
+# Tool 2: Scrape a live page (fallback)
+def scrape_live_page(url: str) -> str:
+    """Scrape a live web page for current information not in the index."""
+    client = ReaderClient(api_key=os.environ.get("READER_API_KEY"))
+    result = client.read(url=url)
+    content = result.data.markdown
+    if len(content) > 10000:
+        content = content[:10000] + "\n\n[Truncated]"
+    return content
+
+live_scrape_tool = FunctionTool.from_defaults(fn=scrape_live_page)
+
+# Tool 3: Extract structured data from a page
+def extract_from_page(url: str, fields: str) -> str:
+    """Extract structured data from a web page.
+    Fields should be comma-separated (e.g., 'title,price,description')."""
+    import json
+    client = ReaderClient(api_key=os.environ.get("READER_API_KEY"))
+    schema = {f.strip(): "string" for f in fields.split(",")}
+    result = client.read(url=url, extract={"schema": schema})
+    if result.data.extracted:
+        return json.dumps(result.data.extracted, indent=2)
+    return "Could not extract data."
+
+extract_tool = FunctionTool.from_defaults(fn=extract_from_page)
+
+# Create the agent
+agent = ReActAgent.from_tools(
+    tools=[doc_tool, live_scrape_tool, extract_tool],
+    llm=Anthropic(model="claude-sonnet-4-6"),
+    verbose=True,
+    system_prompt=(
+        "You are a helpful assistant with access to documentation and "
+        "live web data. Search the docs index first. If the answer isn't "
+        "there, use live scraping to get current information."
+    ),
+)
+
+# Query the agent
+response = agent.chat(
+    "What's the current pricing for the API? "
+    "Check the docs first, then the pricing page if needed."
+)
+print(response)
+```
+
+The ReAct agent reasons about which tool to use. For questions covered in the index, it searches docs (fast, no API credit cost). For questions about current information not in the index, it scrapes the live page (slower, uses a credit, but always current).
+
+## Multi Source Knowledge Bases
+
+Index content from multiple websites into a single knowledge base with source metadata:
+
+```python
+sources = [
+    {"name": "API Docs", "url": "https://docs.example.com", "max_pages": 100},
+    {"name": "Guides", "url": "https://guides.example.com", "max_pages": 50},
+    {"name": "Blog", "url": "https://blog.example.com", "max_pages": 30},
+]
+
+all_docs = []
+crawler = ReaderCrawlReader()
+
+for source in sources:
+    print(f"Crawling {source['name']}...")
+    docs = crawler.load_data(
+        source["url"],
+        max_depth=2,
+        max_pages=source["max_pages"],
+    )
+
+    # Add source name to metadata
+    for doc in docs:
+        doc.metadata["source_name"] = source["name"]
+
+    all_docs.extend(docs)
+    print(f"  {len(docs)} pages")
+
+print(f"\nTotal: {len(all_docs)} documents from {len(sources)} sources")
+
+# Build a unified index
+index = VectorStoreIndex.from_documents(all_docs)
+```
+
+Query with source filtering:
+
+```python
+from llama_index.core.vector_stores import MetadataFilter, MetadataFilters
+
+# Search only API docs
+query_engine = index.as_query_engine(
+    similarity_top_k=5,
+    filters=MetadataFilters(
+        filters=[
+            MetadataFilter(key="source_name", value="API Docs"),
+        ]
+    ),
+)
+
+response = query_engine.query("How do I paginate API responses?")
+```
+
+## Keeping the Index Current
+
+Documentation changes. Schedule periodic re crawls to keep the index fresh:
+
+```python
+import schedule
+import time
+
+def refresh_index():
+    print("Refreshing knowledge base...")
+
+    crawler = ReaderCrawlReader()
+    all_docs = []
+    for source in sources:
+        docs = crawler.load_data(source["url"], max_pages=source["max_pages"])
+        for doc in docs:
+            doc.metadata["source_name"] = source["name"]
+        all_docs.extend(docs)
+
+    # Rebuild the index
+    global index
+    chroma_collection.delete(where={})  # Clear existing
+    index = VectorStoreIndex.from_documents(
+        all_docs,
+        storage_context=storage_context,
+    )
+    print(f"Index refreshed: {len(all_docs)} documents")
+
+schedule.every().sunday.at("03:00").do(refresh_index)
+```
+
+## LlamaIndex vs LangChain for RAG
+
+Both frameworks build RAG pipelines. The choice depends on your use case.
+
+**LlamaIndex strengths.** Purpose built for data indexing and retrieval. The `MarkdownNodeParser` understands document structure natively. Multiple query engine types (basic, chat, sub question, routing) handle different question patterns. Index persistence and incremental updates are first class features.
+
+**LangChain strengths.** Broader scope beyond RAG (agents, chains, tools, memory). Larger ecosystem of integrations. More flexibility for non RAG LLM applications. Better for workflows that combine RAG with other LLM capabilities.
+
+**For documentation knowledge bases specifically**, LlamaIndex's data focused abstractions (node parsers, query engines, index types) are a more natural fit. Reader's markdown output works equally well with both frameworks.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## Conclusion
+
+Reader and LlamaIndex combine naturally for building knowledge bases from web data. Reader handles the hard parts of web access (JavaScript rendering, [anti bot bypass](/blog/anti-bot-detection), content cleaning) and produces markdown that LlamaIndex's node parsers understand natively. The `MarkdownNodeParser` splits on headings, preserves code blocks, and produces semantically coherent chunks without any custom parsing.
+
+The most effective architecture starts with a pre built index from crawled content (fast, cheap) and adds live web scraping through an agent for current information (slower, always up to date). This gives you the best of both: instant answers from indexed docs and real time data from the live web.

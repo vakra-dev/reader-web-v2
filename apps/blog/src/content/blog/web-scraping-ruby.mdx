@@ -1,0 +1,497 @@
+---
+title: "Web Scraping in Ruby: A Developer's Guide (2026)"
+description: "Learn web scraping in Ruby with Nokogiri, Mechanize, and Ferrum. From HTML parsing to browser automation and managed scraping with Reader."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Guides"
+keywords: ["web scraping ruby", "ruby web scraper", "nokogiri scraping", "mechanize ruby"]
+schemaType: "howto"
+faq:
+  - question: "Is Ruby good for web scraping?"
+    answer: "Ruby is a solid choice for web scraping. Nokogiri is one of the most elegant HTML parsers in any language. Mechanize handles stateful navigation and forms better than most alternatives. Ferrum provides Chrome automation via CDP. The ecosystem is smaller than Python's but the tools are mature, well documented, and actively maintained."
+  - question: "What is the best Ruby scraping library?"
+    answer: "Nokogiri for HTML parsing (CSS selectors and XPath, handles malformed HTML). Mechanize for stateful navigation with automatic cookie and form handling. Ferrum for JavaScript rendered pages that need a real browser. Each serves a different use case."
+  - question: "Can Ruby scrape JavaScript rendered pages?"
+    answer: "Yes, through Ferrum, which drives Chrome via the Chrome DevTools Protocol. For managed JavaScript rendering without running a browser in your Ruby application, Reader's API handles rendering and returns clean markdown through a simple HTTP POST."
+  - question: "How does Ruby compare to Python for web scraping?"
+    answer: "Python has a larger scraping ecosystem (more libraries, more tutorials, more Stack Overflow answers). Ruby's tools are fewer but more polished. Nokogiri's API is cleaner than BeautifulSoup's. Mechanize is more intuitive than Python's requests sessions for stateful navigation. For teams already using Ruby, there is no compelling reason to switch to Python for scraping."
+---
+
+Ruby has a mature and elegant set of tools for web scraping. Nokogiri handles HTML parsing with a clean API that feels natural in Ruby. Mechanize manages stateful navigation, form submission, and cookie handling. Ferrum drives headless Chrome for JavaScript rendered pages. The ecosystem is smaller than Python's but the tools are polished, well documented, and actively maintained.
+
+This guide covers three approaches: Nokogiri for HTML parsing, Mechanize for stateful navigation and forms, and Ferrum for JavaScript rendered pages. It also shows how to connect to Reader's API for managed scraping where infrastructure is handled for you.
+
+## Prerequisites
+
+Ruby 3.1 or newer with Bundler. Create a project:
+
+```bash
+mkdir scraper && cd scraper
+bundle init
+```
+
+Add dependencies to your `Gemfile`:
+
+```ruby
+source "https://rubygems.org"
+
+gem "nokogiri"
+gem "mechanize"
+gem "ferrum"
+gem "httparty"
+gem "json"
+gem "csv"
+```
+
+Install:
+
+```bash
+bundle install
+```
+
+## Method 1: Nokogiri
+
+Nokogiri is Ruby's dominant HTML and XML parser. Built on libxml2 and libxslt, it handles malformed HTML gracefully, supports both CSS selectors and XPath, and parses large documents efficiently. Nokogiri has been the standard Ruby parsing library for over 15 years.
+
+### Fetch and Parse a Page
+
+```ruby
+require 'nokogiri'
+require 'open-uri'
+
+url = "https://books.toscrape.com/"
+
+# Fetch the page with proper headers
+html = URI.open(url, {
+  "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " \
+                  "AppleWebKit/537.36 (KHTML, like Gecko) " \
+                  "Chrome/126.0.0.0 Safari/537.36",
+  "Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language" => "en-US,en;q=0.9",
+}).read
+
+doc = Nokogiri::HTML(html)
+
+books = doc.css("article.product_pod")
+puts "Found #{books.length} books"
+
+books.first(5).each do |book|
+  title = book.at_css("h3 a")["title"]
+  price = book.at_css(".price_color").text.strip
+  rating = book.at_css(".star-rating")["class"].split(" ").last
+
+  puts "#{title}: #{price} (#{rating})"
+end
+```
+
+Output:
+```
+Found 20 books
+A Light in the Attic: £51.77 (Three)
+Tipping the Velvet: £53.74 (One)
+Soumission: £50.10 (One)
+Sharp Objects: £47.82 (Four)
+Sapiens: A Brief History of Humankind: £54.23 (Five)
+```
+
+Nokogiri provides two ways to select elements. `css` returns all matching elements (like `find_all` in BeautifulSoup). `at_css` returns the first match (like `find`). Both accept standard CSS selectors.
+
+Always set a real browser User Agent. Ruby's default `open-uri` identifies itself as Ruby, which is flagged by every [anti bot system](/blog/anti-bot-detection).
+
+### XPath Selectors
+
+Nokogiri also supports XPath, which can express queries that CSS selectors cannot:
+
+```ruby
+# CSS selector
+titles = doc.css("article.product_pod h3 a").map { |a| a["title"] }
+
+# Equivalent XPath
+titles = doc.xpath("//article[contains(@class, 'product_pod')]//h3/a/@title")
+           .map(&:value)
+
+# XPath advantage: select by text content
+in_stock = doc.xpath("//p[contains(text(), 'In stock')]")
+puts "#{in_stock.length} items in stock"
+```
+
+XPath's `contains()` function selects elements by text content, which CSS selectors cannot do. Use XPath when you need to match based on text, navigate to parent elements, or express complex positional queries.
+
+### Extracting Structured Data
+
+```ruby
+data = doc.css("article.product_pod").map do |book|
+  {
+    title: book.at_css("h3 a")&.[]("title") || "Unknown",
+    price: book.at_css(".price_color")&.text&.strip || "N/A",
+    rating: book.at_css(".star-rating")&.[]("class")&.split(" ")&.last || "None",
+    url: book.at_css("h3 a")&.[]("href") || "",
+    in_stock: !book.at_css(".instock").nil?,
+  }
+end
+
+data.first(3).each { |b| puts b.inspect }
+```
+
+Ruby's safe navigation operator (`&.`) handles nil values elegantly. If `at_css` returns nil, the chain stops and returns nil instead of raising a NoMethodError. This is Ruby's equivalent of Python's `if element else fallback` pattern but more concise.
+
+### Handling Pagination
+
+```ruby
+require 'nokogiri'
+require 'open-uri'
+
+base_url = "https://books.toscrape.com/catalogue/"
+url = "https://books.toscrape.com/"
+all_books = []
+
+headers = {
+  "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...",
+}
+
+while url
+  html = URI.open(url, headers).read
+  doc = Nokogiri::HTML(html)
+
+  doc.css("article.product_pod").each do |book|
+    all_books << {
+      title: book.at_css("h3 a")["title"],
+      price: book.at_css(".price_color").text.strip,
+    }
+  end
+
+  # Find next page
+  next_link = doc.at_css("li.next a")
+  if next_link
+    url = URI.join(url, next_link["href"]).to_s
+  else
+    url = nil
+  end
+
+  sleep(1) # Rate limiting
+
+  puts "Scraped page, total: #{all_books.length} books"
+end
+
+puts "\nTotal: #{all_books.length} books"
+```
+
+Output:
+```
+Scraped page, total: 20 books
+Scraped page, total: 40 books
+...
+Scraped page, total: 1000 books
+
+Total: 1000 books
+```
+
+Use `URI.join` for URL resolution instead of string concatenation. It handles relative paths, query parameters, and edge cases correctly.
+
+### Scraping Tables
+
+```ruby
+# Scrape a product detail page with a specs table
+detail_html = URI.open(
+  "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html",
+  headers
+).read
+
+detail_doc = Nokogiri::HTML(detail_html)
+
+specs = {}
+detail_doc.css("table.table-striped tr").each do |row|
+  key = row.at_css("th")&.text&.strip
+  value = row.at_css("td")&.text&.strip
+  specs[key] = value if key && value
+end
+
+specs.each { |k, v| puts "#{k}: #{v}" }
+```
+
+Output:
+```
+UPC: a897fe39b1053632
+Product Type: Books
+Price (excl. tax): £51.77
+Price (incl. tax): £51.77
+Tax: £0.00
+Availability: In stock (22 available)
+Number of reviews: 0
+```
+
+### Saving Results
+
+```ruby
+require 'json'
+require 'csv'
+
+# JSON
+File.write("books.json", JSON.pretty_generate(all_books))
+
+# CSV
+CSV.open("books.csv", "w") do |csv|
+  csv << all_books.first.keys
+  all_books.each { |book| csv << book.values }
+end
+
+puts "Exported #{all_books.length} books"
+```
+
+### Limitations of Nokogiri
+
+Nokogiri is a parser, not a browser. It cannot execute JavaScript, handle dynamic content loading, or interact with pages. For sites built with React, Vue, or Next.js, Nokogiri sees only the initial HTML shell before JavaScript executes.
+
+Ruby's net/http and open-uri produce non browser TLS fingerprints that [anti bot systems detect](/blog/anti-bot-detection) regardless of User Agent headers. For protected sites, you need a real browser.
+
+## Method 2: Mechanize
+
+Mechanize goes beyond Nokogiri by adding stateful HTTP client capabilities. It maintains cookies across requests, follows redirects, fills and submits forms, handles HTTP authentication, and tracks browsing history. Mechanize is the Ruby tool for scraping sites that require interaction at the HTTP level.
+
+### Stateful Navigation
+
+```ruby
+require 'mechanize'
+
+agent = Mechanize.new
+agent.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " \
+                   "AppleWebKit/537.36 (KHTML, like Gecko) " \
+                   "Chrome/126.0.0.0 Safari/537.36"
+
+# First page sets cookies automatically
+page = agent.get("https://books.toscrape.com/")
+
+books = page.search("article.product_pod")
+puts "Page 1: #{books.length} books"
+
+# Click the "next" link (Mechanize follows it with cookies)
+next_link = page.link_with(text: /next/i)
+if next_link
+  page2 = next_link.click
+  books2 = page2.search("article.product_pod")
+  puts "Page 2: #{books2.length} books"
+end
+```
+
+Mechanize automatically maintains cookies, follows redirects, and tracks the browsing session. The `link_with` method finds links by text, href pattern, or CSS selector. The `click` method follows the link with all session state preserved.
+
+### Form Submission
+
+For sites with search forms or login pages:
+
+```ruby
+agent = Mechanize.new
+agent.user_agent = "Mozilla/5.0 ..."
+
+# Get the page with the form
+page = agent.get("https://books.toscrape.com/")
+
+# Find and fill the search form (if the site has one)
+# form = page.form_with(action: /search/)
+# form.field_with(name: "q").value = "python"
+# results_page = agent.submit(form)
+
+# Login example (generic)
+# login_page = agent.get("https://example.com/login")
+# form = login_page.form_with(id: "login-form")
+# form["username"] = "user@example.com"
+# form["password"] = "password123"
+# dashboard = agent.submit(form)
+```
+
+Mechanize handles CSRF tokens automatically when they are embedded in the form as hidden fields. It reads the form HTML, preserves all hidden inputs, and submits them alongside your data.
+
+### When to Use Mechanize
+
+Use Mechanize when you need to maintain session state across multiple pages, fill and submit forms, handle login flows at the HTTP level, or follow complex navigation paths with cookies and redirects. Mechanize does not render JavaScript, so it works only with server rendered HTML.
+
+### Concurrent Scraping
+
+Ruby has several options for concurrent scraping:
+
+```ruby
+require 'nokogiri'
+require 'open-uri'
+require 'concurrent'
+
+urls = (1..50).map do |i|
+  "https://books.toscrape.com/catalogue/page-#{i}.html"
+end
+
+headers = { "User-Agent" => "Mozilla/5.0 ..." }
+
+# Thread pool with 5 concurrent workers
+pool = Concurrent::FixedThreadPool.new(5)
+results = Concurrent::Array.new
+
+urls.each do |url|
+  pool.post do
+    begin
+      html = URI.open(url, headers).read
+      doc = Nokogiri::HTML(html)
+      count = doc.css("article.product_pod").length
+      results << { url: url, count: count }
+      sleep(rand(0.5..1.5))
+    rescue => e
+      puts "Error on #{url}: #{e.message}"
+    end
+  end
+end
+
+pool.shutdown
+pool.wait_for_termination
+
+puts "Scraped #{results.length} pages"
+puts "Total books: #{results.sum { |r| r[:count] }}"
+```
+
+Add `gem "concurrent-ruby"` to your Gemfile. The `FixedThreadPool` limits concurrency to 5 threads, preventing server overload while scraping faster than sequential requests.
+
+## Method 3: Ferrum
+
+Ferrum is a Ruby library for driving Chrome via the Chrome DevTools Protocol. It launches headless Chrome, renders JavaScript, and gives you full browser control. Ferrum is the Ruby equivalent of Puppeteer or Playwright.
+
+```ruby
+require 'ferrum'
+
+browser = Ferrum::Browser.new(
+  headless: true,
+  window_size: [1920, 1080],
+)
+
+browser.goto("https://books.toscrape.com/")
+
+# Wait for content to render
+browser.network.wait_for_idle
+
+# Execute JavaScript in the browser
+books = browser.evaluate(<<~JS)
+  Array.from(document.querySelectorAll('article.product_pod')).map(el => ({
+    title: el.querySelector('h3 a').getAttribute('title'),
+    price: el.querySelector('.price_color').textContent.trim(),
+  }))
+JS
+
+puts "Found #{books.length} books"
+books.first(5).each { |b| puts "#{b['title']}: #{b['price']}" }
+
+# Take a screenshot for debugging
+browser.screenshot(path: "debug.png", full: true)
+
+browser.quit
+```
+
+Output:
+```
+Found 20 books
+A Light in the Attic: £51.77
+Tipping the Velvet: £53.74
+Soumission: £50.10
+Sharp Objects: £47.82
+Sapiens: A Brief History of Humankind: £54.23
+```
+
+Ferrum renders JavaScript, handles dynamic content, and produces authentic Chrome TLS fingerprints. Use it for JavaScript heavy sites that Nokogiri and Mechanize cannot handle.
+
+### Handling Dynamic Content
+
+```ruby
+browser.goto("https://example.com/products")
+
+# Scroll to load more content
+5.times do
+  browser.execute("window.scrollTo(0, document.body.scrollHeight)")
+  sleep(2)
+end
+
+# Click a button
+if browser.at_css("button.load-more")
+  browser.at_css("button.load-more").click
+  browser.network.wait_for_idle
+end
+
+# Extract from fully loaded page
+items = browser.evaluate(<<~JS)
+  Array.from(document.querySelectorAll('.product-card')).map(el => ({
+    name: el.querySelector('.name')?.textContent?.trim() || '',
+    price: el.querySelector('.price')?.textContent?.trim() || '',
+  }))
+JS
+
+puts "Found #{items.length} items after scrolling"
+
+browser.quit
+```
+
+### Limitations of Ferrum
+
+Like every browser automation tool, Ferrum uses significant memory per Chrome instance (50 to 200MB), page loads take seconds, and headless mode can be detected by [anti bot systems](/blog/anti-bot-detection). Ferrum is also Chromium only (no Firefox or WebKit support).
+
+## Using Reader from Ruby
+
+Reader does not have an official Ruby SDK. You integrate through the REST API using Ruby's Net::HTTP or HTTParty.
+
+```ruby
+require 'httparty'
+require 'json'
+
+response = HTTParty.post(
+  "https://api.reader.dev/v1/read",
+  headers: {
+    "Content-Type" => "application/json",
+    "x-api-key" => "rdr_your_api_key",
+  },
+  body: { url: "https://example.com" }.to_json,
+)
+
+if response.success?
+  result = JSON.parse(response.body)
+  markdown = result.dig("data", "markdown")
+  title = result.dig("data", "metadata", "title")
+
+  puts "Title: #{title}"
+  puts "Markdown: #{markdown.length} chars"
+  puts markdown[0..500]
+else
+  puts "Error: #{response.code}"
+end
+```
+
+For crawling, add `maxDepth` and `maxPages`:
+
+```ruby
+response = HTTParty.post(
+  "https://api.reader.dev/v1/read",
+  headers: {
+    "Content-Type" => "application/json",
+    "x-api-key" => "rdr_your_api_key",
+  },
+  body: {
+    url: "https://docs.example.com",
+    maxDepth: 3,
+    maxPages: 100,
+  }.to_json,
+)
+```
+
+Reader handles JavaScript rendering, [anti bot bypass](/blog/anti-bot-detection), proxy rotation, and [markdown conversion](/blog/how-to-convert-website-to-markdown) in a single HTTP call. For Ruby teams that want production scraping without managing Ferrum browser pools, proxy infrastructure, and stealth configurations, Reader provides managed infrastructure through a simple REST API.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## When to Use Each Approach
+
+| Criteria | Nokogiri | Mechanize | Ferrum | Reader |
+|----------|----------|-----------|--------|--------|
+| JavaScript rendering | No | No | Yes | Yes |
+| Anti bot bypass | No | No | Partial | Yes |
+| Form submission | No (parser only) | Yes | Yes | N/A |
+| Cookie management | Manual | Automatic | Automatic | Managed |
+| Speed | Fastest | Fast | Slow (browser) | Fast (managed) |
+| Memory | Minimal | Minimal | 50 to 200MB | None (cloud) |
+| Best for | HTML parsing | Stateful navigation | JS rendered pages | Production pipelines |
+
+## Conclusion
+
+Ruby web scraping has three tiers. Nokogiri for fast, elegant HTML parsing with CSS selectors and XPath. Mechanize for stateful navigation, form submission, and cookie management at the HTTP level. Ferrum for JavaScript rendered pages that require a real browser. Reader's API for managed scraping where you want production infrastructure without the operational overhead.
+
+Ruby's scraping ecosystem is smaller than Python's but the tools are polished. Nokogiri's API is among the cleanest HTML parsers in any language. Mechanize's stateful navigation is more intuitive than Python's requests sessions. Ferrum provides CDP browser access with a Ruby idiomatic interface. For Ruby teams already invested in the ecosystem, there is no reason to switch languages for scraping.

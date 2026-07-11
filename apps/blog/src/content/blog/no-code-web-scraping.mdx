@@ -1,0 +1,273 @@
+---
+title: "No-Code Web Scraping with Zapier, Make, and Reader"
+description: "Learn how to scrape websites without writing code using Zapier, Make, and Reader's API. Build automated workflows that extract web data."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Use Cases"
+keywords: ["no code web scraping", "zapier web scraping", "make web scraping", "web scraping without coding"]
+schemaType: "article"
+faq:
+  - question: "Do I need to know how to code?"
+    answer: "No. Zapier, Make, and n8n provide visual workflow builders. You configure the Reader API call by filling in fields (URL, headers, body) rather than writing code. The platforms handle HTTP requests, JSON parsing, and data routing visually."
+  - question: "Which no code platform should I use?"
+    answer: "Zapier is the simplest with the most app integrations (6,000+). Make provides more visual control over data flow with branching and iteration. n8n is self hosted for teams with data sovereignty requirements. All three connect to Reader identically through HTTP request modules."
+  - question: "How many pages can I scrape without code?"
+    answer: "The Reader API handles any volume. The limiting factor is the no code platform: Zapier and Make have execution time limits (30 seconds per step on Zapier, 40 minutes per scenario on Make). For 10 to 50 URLs per run, no code platforms work well. For hundreds or thousands, consider Reader's batch endpoint or moving to Python."
+  - question: "How much does no code scraping cost?"
+    answer: "Reader offers 1,000 free credits per month (1 credit per page). Zapier's free tier allows 100 tasks per month. Make's free tier allows 1,000 operations per month. A workflow that scrapes 10 URLs daily uses roughly 300 Reader credits and 300 Zapier tasks per month, fitting within free tiers on both platforms."
+---
+
+Not everyone who needs web data can write Python scripts. Marketing teams track competitor pricing. Sales teams collect lead information. Analysts monitor industry news. Product managers watch competitor feature pages. All of these are web scraping use cases, and none of them require writing code.
+
+No code automation platforms like Zapier and Make connect to Reader's API through HTTP request modules, letting you build scraping workflows visually. This guide shows how to set up no code scraping pipelines that extract data from any website and route it to Google Sheets, Airtable, Slack, email, CRMs, and other tools your team already uses.
+
+## How No Code Scraping Works
+
+The pipeline has three parts: a trigger (when to scrape), the scrape itself (Reader's API), and an action (where to send the data).
+
+**Trigger.** What starts the workflow. A schedule (every morning at 8 AM), a new row in a spreadsheet (scrape each URL added to a Google Sheet), a Slack message (scrape a URL someone pastes in a channel), or a webhook (triggered by another system).
+
+**Scrape.** An HTTP POST request to Reader's API (`https://api.reader.dev/v1/read`) with the target URL. Reader handles JavaScript rendering, [anti bot bypass](/blog/anti-bot-detection), and content extraction. The response contains clean markdown or structured JSON.
+
+**Action.** Where the scraped data goes. Append a row to Google Sheets. Create a record in Airtable. Send a Slack notification. Add a contact to HubSpot. Create a Notion page. The destination depends on your workflow.
+
+No code platforms connect these three steps visually without writing any code.
+
+## Setting Up Reader with Zapier
+
+Zapier connects over 6,000 apps through automated workflows called Zaps. Reader connects through Zapier's built in HTTP request module (Webhooks by Zapier).
+
+### Step 1: Create a New Zap
+
+Open Zapier and click "Create Zap." Choose your trigger. For scheduled scraping, select "Schedule by Zapier" and set the frequency (daily, weekly, hourly).
+
+### Step 2: Add the Reader HTTP Request
+
+Add a new action step. Search for "Webhooks by Zapier" and select "Custom Request."
+
+Configure the request:
+
+**Method:** POST
+
+**URL:** `https://api.reader.dev/v1/read`
+
+**Headers:**
+```
+Content-Type: application/json
+x-api-key: rdr_your_api_key
+```
+
+**Body:**
+```json
+{
+  "url": "https://competitor.com/pricing"
+}
+```
+
+Test the step. Zapier sends the request to Reader and shows the response, which contains the clean markdown content of the page.
+
+### Step 3: Route the Data
+
+Add another action step to send the scraped data somewhere useful.
+
+**Google Sheets:** Select "Google Sheets" > "Create Spreadsheet Row." Map the markdown content, page title, and URL to columns. Each scrape appends a new row with a timestamp.
+
+**Slack:** Select "Slack" > "Send Channel Message." Post the scraped content (or a summary) to a monitoring channel. Useful for daily competitor updates.
+
+**Email:** Select "Email by Zapier" > "Send Outbound Email." Email the scraped content to a distribution list. Useful for weekly intelligence digests.
+
+**Airtable:** Select "Airtable" > "Create Record." Store scraped data in a structured database with filtering, sorting, and views.
+
+### Extracting Structured Data
+
+For structured output instead of markdown, add an `extract` parameter to the Reader request body:
+
+```json
+{
+  "url": "https://competitor.com/pricing",
+  "extract": {
+    "schema": {
+      "plans": [{
+        "name": "string",
+        "price_monthly": "number",
+        "features": ["string"]
+      }],
+      "has_free_tier": "boolean"
+    }
+  }
+}
+```
+
+Reader returns structured JSON that Zapier can map to individual spreadsheet columns, Airtable fields, or CRM properties. Instead of a block of markdown, you get typed fields: plan names, prices as numbers, features as lists.
+
+### Example: Daily Competitor Price Tracker
+
+A complete Zap that runs every morning:
+
+1. **Trigger:** Schedule by Zapier, every day at 7:00 AM
+2. **Action 1:** Webhooks by Zapier, POST to Reader API with competitor pricing URL and extract schema for plan names and prices
+3. **Action 2:** Google Sheets, append row with date, competitor name, plan names, and prices
+4. **Action 3:** Filter by Zapier, continue only if price changed from yesterday
+5. **Action 4:** Slack, send message to #competitive-intel channel with the price change
+
+This runs automatically every morning. Your team gets a Slack alert only when prices actually change. The Google Sheet builds a historical record for trend analysis.
+
+## Setting Up Reader with Make
+
+Make (formerly Integromat) provides more visual control over data flow than Zapier, with branching, iteration, and data transformation built into the visual editor.
+
+### Step 1: Create a New Scenario
+
+Open Make and create a new scenario. Add a trigger module. For scheduled scraping, use the "Flow Control" clock module.
+
+### Step 2: Add an HTTP Module
+
+Add an "HTTP" > "Make a request" module.
+
+**URL:** `https://api.reader.dev/v1/read`
+
+**Method:** POST
+
+**Headers:**
+```
+Content-Type: application/json
+x-api-key: rdr_your_api_key
+```
+
+**Body type:** Raw
+
+**Request content:**
+```json
+{
+  "url": "https://competitor.com/pricing"
+}
+```
+
+### Step 3: Parse the Response
+
+Add a "JSON" > "Parse JSON" module to extract fields from Reader's response. Map `data.markdown` for the page content, `data.metadata.title` for the page title, and `data.extracted` for structured data (if you used the extract parameter).
+
+### Step 4: Route to Destinations
+
+Make's visual router lets you send data to multiple destinations from a single scrape.
+
+**Branch 1:** Google Sheets - append a row with the scraped content and timestamp.
+
+**Branch 2:** Slack - post a summary to a monitoring channel.
+
+**Branch 3:** Airtable - create or update a record in a competitor tracking database.
+
+### Iterating Over Multiple URLs
+
+Make excels at scraping multiple URLs in a single run. Use a "Google Sheets" module to read a column of URLs, then an "Iterator" module to loop through them, calling the Reader HTTP module for each URL.
+
+1. **Google Sheets:** Get rows from "URLs to Monitor" sheet
+2. **Iterator:** Loop through each row
+3. **HTTP:** POST to Reader API with the URL from the current row
+4. **JSON:** Parse the response
+5. **Google Sheets:** Append results to "Scraped Data" sheet
+
+This lets non technical team members manage the scraping targets by adding or removing URLs from a spreadsheet. No code changes, no developer involvement.
+
+### Example: Weekly Blog Monitoring
+
+A Make scenario that tracks competitor blog content weekly:
+
+1. **Trigger:** Scheduled, every Monday at 9:00 AM
+2. **Google Sheets:** Read competitor blog URLs from a "Blogs to Monitor" sheet
+3. **Iterator:** Loop through each URL
+4. **HTTP:** POST to Reader API with crawl parameters (maxDepth: 1, maxPages: 10) to discover recent blog posts
+5. **JSON:** Parse response, extract page URLs and titles
+6. **Google Sheets:** Append new blog post titles and URLs to a "Competitor Content" sheet
+7. **Filter:** Continue only if new posts found since last run
+8. **Slack:** Post summary of new competitor blog posts to #content-strategy channel
+
+## Building with n8n (Self Hosted)
+
+For teams that need a self hosted no code platform, n8n provides similar functionality to Zapier and Make but runs on your own infrastructure.
+
+### HTTP Request Node
+
+```json
+{
+  "method": "POST",
+  "url": "https://api.reader.dev/v1/read",
+  "headers": {
+    "Content-Type": "application/json",
+    "x-api-key": "rdr_your_api_key"
+  },
+  "body": {
+    "url": "https://example.com"
+  }
+}
+```
+
+n8n's HTTP Request node works identically to Zapier and Make. The advantage is data sovereignty: scraped data flows through your infrastructure rather than third party cloud platforms.
+
+## Common No Code Scraping Workflows
+
+### Lead Enrichment
+
+**Trigger:** New contact added to HubSpot CRM.
+**Scrape:** Reader extracts company data from the contact's domain (about page, team page).
+**Action:** Update the HubSpot contact with company size, industry, and technology stack.
+
+### Content Monitoring
+
+**Trigger:** Daily schedule.
+**Scrape:** Reader scrapes 10 competitor blog index pages.
+**Action:** Compare with previous scrape. Send Slack alert for new posts. Append to Google Sheet for tracking.
+
+### Price Tracking
+
+**Trigger:** Twice daily schedule (morning and evening).
+**Scrape:** Reader extracts structured pricing data from [competitor product pages](/solutions/price-monitoring).
+**Action:** Append to Google Sheet with timestamp. Send email alert if price drops more than 10%.
+
+### Job Posting Monitoring
+
+**Trigger:** Weekly schedule.
+**Scrape:** Reader scrapes competitor careers pages.
+**Action:** Extract job titles and departments. Compare with previous week. Alert on new senior hires or team expansion.
+
+### News and Mention Tracking
+
+**Trigger:** Daily schedule.
+**Scrape:** Reader scrapes industry news sites and [Google Search results](/blog/scrape-google-search-results) for brand mentions.
+**Action:** Filter for relevant mentions. Post to Slack. Create tasks in Asana or Trello for response.
+
+## Limitations of No Code Scraping
+
+No code platforms have constraints that matter for scraping workflows.
+
+**Execution time limits.** Zapier limits each step to 30 seconds. Make limits scenarios to 40 minutes total. Large crawls (100+ pages) may timeout. For large scale scraping, use Reader's async jobs (crawl and batch) and poll for completion in a separate run.
+
+**Rate limits on triggers.** Free and lower tier plans limit how often workflows run. Zapier's free tier runs every 15 minutes. Make's free tier allows 1,000 operations per month. For high frequency monitoring (hourly), you need paid plans.
+
+**Data volume.** No code platforms are designed for moving records, not large text blobs. A full page of markdown (5,000 to 10,000 characters) fits in most fields but may hit column limits in spreadsheets. Use Reader's extract capability to get structured JSON (smaller, typed) instead of full markdown when data volume is a concern.
+
+**Error handling.** Zapier and Make handle errors with retries and error paths, but debugging HTTP request failures requires understanding status codes and response formats. Non technical users may need initial setup help.
+
+### When to Move to Code
+
+No code works well for monitoring 10 to 50 URLs on a schedule with simple data routing. When you need to scrape thousands of URLs, implement complex change detection logic, build custom analysis pipelines, or integrate with internal systems that no code platforms do not support, Python scripts provide more control. Reader's [Python SDK](/blog/web-scraping-python) and [JavaScript SDK](/blog/web-scraping-javascript) handle the transition.
+
+## Tips for Non Technical Users
+
+**Start with one URL.** Build and test the workflow with a single URL before expanding to a list. Verify that the data looks correct in the destination (Google Sheets, Slack) before automating.
+
+**Use extract for structured data.** Full markdown is useful for reading but hard to analyze in spreadsheets. The extract parameter returns typed fields (prices as numbers, names as strings) that map cleanly to spreadsheet columns and database fields.
+
+**Add error handling.** In Zapier, add a "Filter" step that checks the HTTP response status code. Continue only if status is 200. In Make, add an error handler route that sends a notification when a scrape fails.
+
+**Keep your API key secure.** Store the Reader API key in Zapier's or Make's connection/variable storage rather than hardcoding it in the request body. This prevents accidental exposure if you share the workflow.
+
+**Monitor credit usage.** Each Reader scrape uses 1 credit. A workflow that scrapes 10 URLs daily uses 300 credits per month. The free tier includes 1,000 credits per month. Monitor usage at reader.dev to stay within your allocation.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. Sign up for an API key, then connect it to Zapier, Make, or n8n as shown above. No coding required.
+
+## Conclusion
+
+No code web scraping makes web data accessible to marketing, sales, product, and operations teams that do not write code. Reader's API connects to any automation platform through standard HTTP requests. Zapier, Make, and n8n each provide the trigger, routing, and destination logic visually.
+
+The most common workflows are [competitor price tracking](/solutions/price-monitoring), [lead enrichment](/solutions/lead-generation), content monitoring, job posting tracking, and news mention alerts. Start with one URL, one destination (Google Sheets is the easiest), and expand once the pipeline proves value.

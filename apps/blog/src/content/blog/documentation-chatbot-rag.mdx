@@ -1,0 +1,496 @@
+---
+title: "How to Build a Documentation Chatbot with Reader + RAG"
+description: "Build a documentation chatbot that answers questions from your docs using Reader for crawling, embeddings for retrieval, and an LLM."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Guides"
+keywords: ["documentation chatbot", "rag chatbot", "docs chatbot", "retrieval augmented generation"]
+schemaType: "howto"
+faq:
+  - question: "How many documentation pages can this handle?"
+    answer: "There is no hard limit. ChromaDB handles tens of thousands of chunks locally. Pinecone, Weaviate, and Qdrant handle millions. A 500 page documentation site produces roughly 3,000 to 5,000 chunks, well within the capacity of any vector database. Reader's crawl handles up to 10,000 pages per job."
+  - question: "How much does it cost to run?"
+    answer: "The main costs are embedding generation and LLM queries. Embedding 5,000 chunks with Voyage 3 costs roughly $0.50. Each user query costs roughly $0.01 to $0.05 in LLM fees (depending on the model and context size). Reader's crawl uses 1 credit per page (1,000 free per month). The vector database cost depends on the provider (ChromaDB is free, Pinecone starts free for small indexes)."
+  - question: "How do I handle code examples in documentation?"
+    answer: "Markdown preserves code blocks with language annotations. The chunking algorithm keeps code blocks within their parent section rather than splitting mid code. The embedding model encodes the code along with its surrounding explanation, so retrieval finds both the code and the context. Voyage 3 is particularly strong on code embeddings."
+  - question: "Can I use this for multiple documentation sites?"
+    answer: "Yes. Crawl each site separately and store chunks with a source metadata field. At query time, filter by source if the user is asking about a specific product, or search across all sources for cross product questions."
+---
+
+Documentation sites have a search problem. Users type a question, get a list of page titles, and have to read through multiple pages to find their answer. A documentation chatbot solves this by reading all the docs, understanding the content, and answering questions directly with citations to the source pages.
+
+Building a documentation chatbot requires three components: a way to crawl and clean the documentation content, a way to store and retrieve relevant sections when a question arrives, and a language model to synthesize the retrieved content into an answer. This is retrieval augmented generation (RAG), and this guide walks through building it end to end with Reader for crawling, a vector database for retrieval, and Claude for generation.
+
+## Architecture Overview
+
+The documentation chatbot has two phases: ingestion (crawl the docs and index them) and query (answer user questions from the index).
+
+### Ingestion Pipeline
+
+```
+Docs site → Reader crawl → Clean markdown pages → 
+Split into chunks → Generate embeddings → Store in vector database
+```
+
+1. Crawl the documentation site with Reader to get clean markdown for every page
+2. Split each page into chunks (sections or paragraphs)
+3. Generate embeddings for each chunk using an embedding model
+4. Store the chunks and embeddings in a vector database
+
+### Query Pipeline
+
+```
+User question → Generate question embedding → 
+Search vector database for similar chunks → 
+Send question + relevant chunks to LLM → Answer with citations
+```
+
+1. Convert the user's question into an embedding
+2. Search the vector database for the most similar chunks
+3. Send the question and retrieved chunks to an LLM
+4. The LLM generates an answer grounded in the documentation
+
+## Step 1: Crawl the Documentation
+
+Reader crawls the documentation site and returns clean markdown for every page. Markdown is ideal for RAG because it preserves document structure (headings, lists, tables, code blocks) while stripping navigation, scripts, and boilerplate that waste tokens.
+
+```python
+from reader_py import ReaderClient
+
+client = ReaderClient(api_key="rdr_your_api_key")
+
+# Crawl the documentation site
+result = client.read(
+    url="https://docs.example.com",
+    max_depth=3,
+    max_pages=200,
+)
+
+pages = []
+for page in result.data:
+    pages.append({
+        "url": page.url,
+        "title": page.metadata.title if page.metadata else "",
+        "markdown": page.markdown,
+    })
+
+print(f"Crawled {len(pages)} documentation pages")
+print(f"Total content: {sum(len(p['markdown']) for p in pages):,} chars")
+```
+
+Output:
+```
+Crawled 147 documentation pages
+Total content: 892,341 chars
+```
+
+### Why Markdown Matters for RAG
+
+Raw HTML wastes 67 to 87 percent of tokens on tags, attributes, scripts, and navigation. A documentation page that is 3,000 words of content might be 15,000 tokens as HTML but only 4,000 tokens as markdown. This matters twice in a RAG pipeline: once during embedding (more content per embedding call) and once during generation (more retrieved context fits in the LLM's context window).
+
+Markdown also chunks better than HTML. Headings (`#`, `##`, `###`) are explicit structural markers that chunking algorithms can split on. In HTML, the same structure is buried in `<h1>`, `<h2>`, `<h3>` tags surrounded by `<div>` wrappers, classes, and IDs.
+
+### Filtering Irrelevant Pages
+
+Not every crawled page belongs in the index. API reference pages with parameter tables may be useful. Changelog pages with version history may not. Filter by URL pattern or content:
+
+```python
+# Keep only documentation content, skip changelog, blog, etc.
+filtered_pages = [
+    p for p in pages
+    if "/docs/" in p["url"] or "/guide/" in p["url"] or "/api/" in p["url"]
+    and "/changelog" not in p["url"]
+    and "/blog/" not in p["url"]
+    and len(p["markdown"]) > 200  # Skip empty or near-empty pages
+]
+
+print(f"Filtered to {len(filtered_pages)} relevant pages")
+```
+
+## Step 2: Chunk the Content
+
+Documents must be split into chunks small enough to embed and retrieve. The chunking strategy directly affects answer quality.
+
+### Heading Based Chunking
+
+Split on markdown headings. Each section (heading + content until the next heading) becomes a chunk. This preserves semantic coherence because documentation sections are written to cover one topic.
+
+```python
+import re
+
+def chunk_by_headings(markdown, url, min_chunk_size=100):
+    chunks = []
+    
+    # Split on headings (##, ###)
+    sections = re.split(r'\n(?=#{1,3} )', markdown)
+    
+    for section in sections:
+        section = section.strip()
+        if len(section) < min_chunk_size:
+            continue
+        
+        # Extract heading for metadata
+        heading_match = re.match(r'^(#{1,3})\s+(.+)', section)
+        heading = heading_match.group(2) if heading_match else ""
+        
+        chunks.append({
+            "text": section,
+            "url": url,
+            "heading": heading,
+            "char_count": len(section),
+        })
+    
+    return chunks
+
+# Chunk all pages
+all_chunks = []
+for page in filtered_pages:
+    page_chunks = chunk_by_headings(page["markdown"], page["url"])
+    for chunk in page_chunks:
+        chunk["page_title"] = page["title"]
+    all_chunks.extend(page_chunks)
+
+print(f"Created {len(all_chunks)} chunks")
+print(f"Average chunk size: {sum(c['char_count'] for c in all_chunks) // len(all_chunks)} chars")
+```
+
+Output:
+```
+Created 843 chunks
+Average chunk size: 847 chars
+```
+
+### Handling Large Sections
+
+Some documentation sections are very long (3,000+ words). These should be split further to fit within embedding model token limits (typically 512 to 8,192 tokens depending on the model).
+
+```python
+def split_large_chunks(chunks, max_chars=2000):
+    result = []
+    for chunk in chunks:
+        if chunk["char_count"] <= max_chars:
+            result.append(chunk)
+        else:
+            # Split on paragraph boundaries
+            paragraphs = chunk["text"].split("\n\n")
+            current = ""
+            for para in paragraphs:
+                if len(current) + len(para) > max_chars and current:
+                    result.append({
+                        **chunk,
+                        "text": current.strip(),
+                        "char_count": len(current.strip()),
+                    })
+                    current = para
+                else:
+                    current += "\n\n" + para if current else para
+            if current.strip():
+                result.append({
+                    **chunk,
+                    "text": current.strip(),
+                    "char_count": len(current.strip()),
+                })
+    return result
+
+all_chunks = split_large_chunks(all_chunks, max_chars=2000)
+print(f"After splitting large chunks: {len(all_chunks)} chunks")
+```
+
+### Overlapping Context
+
+Add the page title and heading hierarchy as a prefix to each chunk. This provides context that helps the embedding model understand what the chunk is about, even when the chunk text alone is ambiguous.
+
+```python
+for chunk in all_chunks:
+    prefix = f"Page: {chunk['page_title']}\n"
+    if chunk["heading"]:
+        prefix += f"Section: {chunk['heading']}\n\n"
+    chunk["text_with_context"] = prefix + chunk["text"]
+```
+
+## Step 3: Generate Embeddings
+
+Convert each chunk into a vector embedding using an embedding model. The embedding captures the semantic meaning of the text, enabling similarity search.
+
+```python
+import anthropic
+import numpy as np
+
+# Using Voyage AI embeddings (recommended by Anthropic)
+# pip install voyageai
+import voyageai
+
+voyage = voyageai.Client()
+
+def embed_chunks(chunks, batch_size=128):
+    embeddings = []
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i:i + batch_size]
+        texts = [c["text_with_context"] for c in batch]
+        
+        result = voyage.embed(
+            texts,
+            model="voyage-3",
+            input_type="document",
+        )
+        embeddings.extend(result.embeddings)
+        
+        print(f"Embedded {min(i + batch_size, len(chunks))}/{len(chunks)} chunks")
+    
+    return embeddings
+
+chunk_embeddings = embed_chunks(all_chunks)
+print(f"Generated {len(chunk_embeddings)} embeddings")
+print(f"Embedding dimension: {len(chunk_embeddings[0])}")
+```
+
+### Choosing an Embedding Model
+
+Several embedding models work well for documentation:
+
+**Voyage 3** (Anthropic recommended). Strong performance on code and technical documentation. 1,024 dimensions.
+
+**OpenAI text-embedding-3-small.** Good balance of cost and quality. 1,536 dimensions. Cheapest option for large documentation sets.
+
+**OpenAI text-embedding-3-large.** Higher quality, higher cost. 3,072 dimensions (configurable).
+
+For most documentation chatbots, Voyage 3 or text-embedding-3-small provides sufficient quality. The choice matters less than the chunking strategy: well chunked content with a mediocre embedding model outperforms poorly chunked content with the best model.
+
+## Step 4: Store in a Vector Database
+
+Store chunks and embeddings in a vector database for efficient similarity search. Several options work:
+
+### Using ChromaDB (Local, Simple)
+
+```python
+# pip install chromadb
+import chromadb
+
+client = chromadb.Client()
+collection = client.create_collection(
+    name="documentation",
+    metadata={"hnsw:space": "cosine"},
+)
+
+# Add chunks with embeddings
+collection.add(
+    ids=[f"chunk_{i}" for i in range(len(all_chunks))],
+    embeddings=chunk_embeddings,
+    documents=[c["text_with_context"] for c in all_chunks],
+    metadatas=[{
+        "url": c["url"],
+        "heading": c["heading"],
+        "page_title": c["page_title"],
+    } for c in all_chunks],
+)
+
+print(f"Indexed {collection.count()} chunks in ChromaDB")
+```
+
+ChromaDB runs locally with no infrastructure. Good for prototyping and small documentation sets (under 10,000 chunks). For production, consider Pinecone, Weaviate, Qdrant, or pgvector.
+
+### Using Pinecone (Managed, Scalable)
+
+```python
+# pip install pinecone-client
+from pinecone import Pinecone
+
+pc = Pinecone(api_key="your_pinecone_key")
+index = pc.Index("documentation")
+
+# Upsert chunks with embeddings
+vectors = []
+for i, (chunk, embedding) in enumerate(zip(all_chunks, chunk_embeddings)):
+    vectors.append({
+        "id": f"chunk_{i}",
+        "values": embedding,
+        "metadata": {
+            "text": chunk["text_with_context"],
+            "url": chunk["url"],
+            "heading": chunk["heading"],
+            "page_title": chunk["page_title"],
+        },
+    })
+
+# Upsert in batches
+for i in range(0, len(vectors), 100):
+    index.upsert(vectors=vectors[i:i + 100])
+
+print(f"Indexed {len(vectors)} chunks in Pinecone")
+```
+
+## Step 5: Build the Query Pipeline
+
+When a user asks a question, embed the question, search for similar chunks, and generate an answer.
+
+```python
+def ask_docs(question, top_k=5):
+    # Step 1: Embed the question
+    question_embedding = voyage.embed(
+        [question],
+        model="voyage-3",
+        input_type="query",
+    ).embeddings[0]
+    
+    # Step 2: Search for similar chunks
+    results = collection.query(
+        query_embeddings=[question_embedding],
+        n_results=top_k,
+    )
+    
+    # Step 3: Build context from retrieved chunks
+    context_parts = []
+    sources = []
+    for doc, metadata in zip(results["documents"][0], results["metadatas"][0]):
+        context_parts.append(doc)
+        sources.append({
+            "url": metadata["url"],
+            "heading": metadata["heading"],
+            "page_title": metadata["page_title"],
+        })
+    
+    context = "\n\n---\n\n".join(context_parts)
+    
+    # Step 4: Generate answer with Claude
+    client = anthropic.Anthropic()
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1000,
+        system="""You are a documentation assistant. Answer the user's question 
+based ONLY on the provided documentation context. If the answer is not in the 
+context, say so. Cite the source page for each claim.""",
+        messages=[{
+            "role": "user",
+            "content": f"""Context from documentation:
+
+{context}
+
+Question: {question}
+
+Answer the question based on the documentation above. 
+Include source URLs for your claims.""",
+        }],
+    )
+    
+    answer = response.content[0].text
+    
+    return {
+        "question": question,
+        "answer": answer,
+        "sources": sources,
+    }
+
+# Test the chatbot
+result = ask_docs("How do I authenticate with the API?")
+print(f"Q: {result['question']}")
+print(f"\nA: {result['answer']}")
+print(f"\nSources:")
+for source in result["sources"]:
+    print(f"  - {source['page_title']}: {source['url']}")
+```
+
+### Improving Answer Quality
+
+**System prompt.** The system prompt instructs the LLM to answer only from provided context and cite sources. This prevents hallucination (making up answers not in the docs) and provides traceability (users can verify by clicking the source link).
+
+**Top K tuning.** Retrieve 5 to 10 chunks per question. Too few misses relevant context. Too many dilutes the signal with irrelevant content and wastes tokens. Start with 5 and increase if users report missing information.
+
+**Reranking.** After initial retrieval, use a reranking model (Cohere Rerank, Voyage Rerank) to reorder results by relevance to the specific question. This improves precision without increasing the retrieval count.
+
+```python
+# Optional: rerank retrieved chunks
+def rerank_results(question, documents, top_k=5):
+    reranked = voyage.rerank(
+        query=question,
+        documents=documents,
+        model="rerank-2",
+        top_k=top_k,
+    )
+    return [doc for doc, score in zip(reranked.documents, reranked.scores)]
+```
+
+## Step 6: Keep the Index Fresh
+
+Documentation changes. New pages are added. Existing pages are updated. The index must stay current.
+
+### Scheduled Re Crawl
+
+Run the ingestion pipeline on a schedule. Weekly is sufficient for most documentation sites. Daily for fast moving docs.
+
+```python
+import schedule
+import time
+
+def refresh_index():
+    print("Re-crawling documentation...")
+    
+    # Crawl the docs site
+    result = client.read(
+        url="https://docs.example.com",
+        max_depth=3,
+        max_pages=200,
+    )
+    
+    # Process pages -> chunks -> embeddings
+    pages = [{"url": p.url, "title": p.metadata.title, "markdown": p.markdown}
+             for p in result.data]
+    
+    filtered = filter_pages(pages)
+    chunks = chunk_all_pages(filtered)
+    embeddings = embed_chunks(chunks)
+    
+    # Replace the collection
+    collection.delete(where={})  # Clear existing
+    collection.add(
+        ids=[f"chunk_{i}" for i in range(len(chunks))],
+        embeddings=embeddings,
+        documents=[c["text_with_context"] for c in chunks],
+        metadatas=[{
+            "url": c["url"],
+            "heading": c["heading"],
+            "page_title": c["page_title"],
+        } for c in chunks],
+    )
+    
+    print(f"Index refreshed: {len(chunks)} chunks")
+
+schedule.every().week.do(refresh_index)
+```
+
+### Incremental Updates
+
+For large documentation sites, re crawling everything weekly is expensive. Instead, crawl only pages that changed. Reader's crawl discovers all URLs. Compare the discovered URLs with the previous crawl to find new and updated pages (based on last modified headers or content hash comparison). Re embed only the changed pages.
+
+## Deploying the Chatbot
+
+### As a Web Widget
+
+Embed the chatbot in your documentation site as a floating widget. The frontend sends the question to your backend, which runs the query pipeline and returns the answer.
+
+```python
+# FastAPI backend
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.post("/ask")
+async def ask(question: str):
+    result = ask_docs(question)
+    return result
+```
+
+### As a Slack Bot
+
+Connect the query pipeline to a Slack bot. Team members ask questions in a Slack channel and get answers grounded in the documentation.
+
+### As an MCP Tool
+
+Expose the chatbot as an MCP tool. AI assistants in Claude Code, Cursor, and VS Code can query the documentation directly during coding sessions.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## Conclusion
+
+A documentation chatbot replaces keyword search with conversational Q&A grounded in your actual documentation. The pipeline is straightforward: Reader crawls the docs to clean markdown, heading based chunking splits content into retrievable sections, an embedding model converts chunks to vectors, a vector database enables similarity search, and an LLM generates answers with source citations.
+
+The quality of the chatbot depends more on chunking strategy and retrieval tuning than on the LLM model. Well chunked markdown with contextual prefixes, appropriate top K retrieval, and a clear system prompt produces reliable answers. Reader's markdown output is the foundation: clean, structured, token efficient content that chunks well and retrieves accurately.

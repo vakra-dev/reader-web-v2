@@ -37,7 +37,6 @@ const columns = [
       { label: "Scrape Google Maps", href: "/blog/scrape-google-maps" },
       { label: "Cloudflare Bypass", href: "/blog/bypass-cloudflare" },
       { label: "Anti-Bot Detection", href: "/blog/anti-bot-detection" },
-      { label: "Fix 403 Errors", href: "/blog/403-error-web-scraping" },
     ],
   },
   {

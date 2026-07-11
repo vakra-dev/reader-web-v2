@@ -1,0 +1,384 @@
+---
+title: "Web Scraping for Lead Generation: A Practical Guide"
+description: "Learn how to use web scraping for B2B lead generation. Covers data sources, enrichment workflows, Python code examples, and managed scraping with Reader."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Use Cases"
+keywords: ["web scraping lead generation", "b2b data scraping", "lead enrichment", "prospect data extraction"]
+schemaType: "article"
+faq:
+  - question: "What is the best data source for B2B leads?"
+    answer: "Company websites provide the richest first party data (about pages, team pages, careers pages). Business directories (Crunchbase, G2, industry specific) provide discovery and categorization. Job boards provide hiring signals. The most complete enrichment uses all three sources together."
+  - question: "How do I detect a company's technology stack?"
+    answer: "Inspect page source for JavaScript framework signatures, analytics tags, CMS indicators, and marketing tool scripts. Dedicated services (BuiltWith, Wappalyzer) provide more comprehensive detection. Reader's markdown output strips scripts, so for technology detection, scrape the raw HTML or use a dedicated detection API."
+  - question: "How many leads can I enrich per day?"
+    answer: "With Reader's batch scraping (up to 1,000 URLs per request), you can enrich hundreds of companies per hour. The practical limit is your credit allocation and the rate at which target sites allow access. The free tier (1,000 credits per month) covers roughly 500 company enrichments (about page + careers page per company)."
+---
+
+Lead generation teams spend hours manually researching prospects. Copying company names from directories. Visiting individual websites for contact details. Cross referencing LinkedIn profiles with CRM records. Checking technology stacks on BuiltWith. All of this is extractable through web scraping, turning hours of manual research into minutes of automated collection.
+
+This guide covers which data sources to scrape for lead generation, what data points to extract, how to build enrichment pipelines in Python, legal considerations, and how Reader simplifies the infrastructure.
+
+## What Data Lead Generation Needs
+
+B2B lead generation collects two categories of data: company level information (firmographics) and contact level information (individual prospects).
+
+### Company Firmographics
+
+**Basic identification.** Company name, domain, headquarters address, founding year, industry classification (SIC/NAICS codes).
+
+**Size and scale.** Employee count (exact or range), estimated revenue, number of office locations, geographic presence.
+
+**Technology stack.** What software, frameworks, and platforms the company uses. Technology choices signal buying intent: a company using Salesforce is unlikely to buy another CRM but might buy Salesforce integrations.
+
+**Business signals.** Recent funding rounds, job postings (hiring signals growth and priorities), press releases, product launches, partnership announcements, leadership changes.
+
+**Social presence.** LinkedIn company page (follower count, post frequency), Twitter/X account, company blog (post frequency, topics).
+
+### Contact Information
+
+**Professional details.** Full name, job title, department, seniority level, LinkedIn profile URL.
+
+**Contact channels.** Business email address, direct phone number, office phone extension.
+
+**Activity signals.** Recent LinkedIn posts, conference appearances, published articles, podcast appearances.
+
+Note: personal data collection is subject to privacy regulations (GDPR, CCPA, and others) that vary by jurisdiction. See the legal section at the end of this guide.
+
+## Where to Find Lead Data
+
+Different data sources provide different data points. A complete enrichment pipeline typically combines multiple sources.
+
+### Company Websites
+
+The richest source of firmographic data. Company websites contain about pages (leadership team, founding story, mission), product/service pages (what they sell, who they serve), careers pages (job postings reveal technology stack, growth areas, and team structure), press/news pages (funding, partnerships, launches), and contact pages (office addresses, phone numbers, general email).
+
+### Business Directories
+
+Directories aggregate company data across industries. Sources include Crunchbase (funding, investors, team), G2 (software reviews, technology categories), Clutch (B2B service providers), industry specific directories (legal, healthcare, manufacturing), and local business directories (Chamber of Commerce listings, BBB).
+
+### Job Boards
+
+Job postings reveal what a company needs right now. [Indeed](/blog/scrape-indeed), LinkedIn Jobs, Glassdoor, and industry specific boards contain job titles (what roles they are hiring), required skills and technologies (reveals their stack), salary ranges (reveals budget), team descriptions (reveals org structure), and posting frequency (reveals growth rate).
+
+### Social Platforms
+
+LinkedIn is the primary B2B data source. Company pages show employee count, industry, specialties, and recent posts. Individual profiles show job history, skills, education, and connections. LinkedIn restricts automated access aggressively, so scraping must be approached carefully and within their terms.
+
+### Technology Detection
+
+Services like BuiltWith, Wappalyzer, and SimilarTech detect technologies used by websites. You can also detect technologies yourself by inspecting page source: JavaScript framework (React, Vue, Angular), analytics tools (Google Analytics, Mixpanel, Amplitude), CMS (WordPress, Drupal, Webflow), e-commerce platform (Shopify, WooCommerce, BigCommerce), and marketing tools (HubSpot, Marketo, Intercom).
+
+## Building a Lead Enrichment Pipeline
+
+A typical pipeline starts with a seed list (company names or domains) and enriches each entry with data from multiple sources.
+
+### Step 1: Scrape Company Websites
+
+```python
+from reader_py import ReaderClient
+
+reader = ReaderClient(api_key="rdr_your_api_key")
+
+seed_companies = [
+    {"name": "Acme Corp", "domain": "acmecorp.com"},
+    {"name": "Beta Inc", "domain": "betainc.com"},
+    {"name": "Gamma LLC", "domain": "gammallc.com"},
+]
+
+enriched = []
+
+for company in seed_companies:
+    # Scrape the about page for company info
+    about_result = reader.read(
+        url=f"https://{company['domain']}/about",
+        extract={
+            "schema": {
+                "founded": "string",
+                "headquarters": "string",
+                "employee_count": "string",
+                "description": "string",
+                "leadership": [{
+                    "name": "string",
+                    "title": "string",
+                }]
+            }
+        }
+    )
+
+    company_data = {
+        **company,
+        **about_result.data.extracted,
+    }
+
+    # Scrape the careers page for hiring signals
+    careers_result = reader.read(
+        url=f"https://{company['domain']}/careers"
+    )
+    company_data["careers_markdown"] = careers_result.data.markdown
+
+    enriched.append(company_data)
+    print(f"Enriched: {company['name']}")
+```
+
+Reader's extract capability pulls structured data from unstructured company pages. The schema defines what fields to extract. Missing fields return null rather than hallucinated values. The leadership array captures names and titles from the about page automatically.
+
+### Step 2: Extract Technology Stack
+
+```python
+def detect_technologies(markdown, url):
+    """Basic technology detection from page content and structure."""
+    techs = []
+
+    # Check for common technologies in the page content
+    tech_signals = {
+        "React": ["react", "reactjs", "react.js", "__NEXT_DATA__"],
+        "Vue": ["vue", "vuejs", "vue.js"],
+        "Angular": ["angular", "ng-"],
+        "WordPress": ["wp-content", "wordpress"],
+        "Shopify": ["shopify", "myshopify"],
+        "HubSpot": ["hubspot", "hs-scripts"],
+        "Salesforce": ["salesforce", "force.com"],
+        "Intercom": ["intercom", "intercomcdn"],
+    }
+
+    content_lower = markdown.lower()
+    for tech, signals in tech_signals.items():
+        if any(signal in content_lower for signal in signals):
+            techs.append(tech)
+
+    return techs
+
+# Scrape the homepage and detect technologies
+for company in enriched:
+    homepage = reader.read(url=f"https://{company['domain']}")
+    company["technologies"] = detect_technologies(
+        homepage.data.markdown,
+        company["domain"]
+    )
+```
+
+For more comprehensive technology detection, use dedicated tools (BuiltWith API, Wappalyzer) or scrape the page source HTML (not markdown) and check for specific script tags, meta tags, and cookie names.
+
+### Step 3: Extract Job Postings for Hiring Signals
+
+```python
+# Parse careers page markdown for job posting signals
+import re
+
+def extract_job_signals(careers_markdown):
+    if not careers_markdown:
+        return {"job_count": 0, "departments": [], "technologies": []}
+
+    # Count job listings (heuristic: count headings that look like titles)
+    lines = careers_markdown.split("\n")
+    job_titles = [l for l in lines if l.startswith("## ") or l.startswith("### ")]
+
+    # Look for technology keywords in job descriptions
+    tech_keywords = [
+        "python", "javascript", "typescript", "react", "aws",
+        "kubernetes", "docker", "go", "rust", "machine learning",
+    ]
+    found_techs = [t for t in tech_keywords
+                   if t in careers_markdown.lower()]
+
+    # Look for department keywords
+    dept_keywords = [
+        "engineering", "marketing", "sales", "product",
+        "design", "data", "operations", "finance",
+    ]
+    found_depts = [d for d in dept_keywords
+                   if d in careers_markdown.lower()]
+
+    return {
+        "job_count": len(job_titles),
+        "departments_hiring": found_depts,
+        "technologies_mentioned": found_techs,
+    }
+
+for company in enriched:
+    company["hiring_signals"] = extract_job_signals(
+        company.get("careers_markdown", "")
+    )
+    # Remove raw markdown to save space
+    del company["careers_markdown"]
+```
+
+### Step 4: Score and Prioritize
+
+```python
+def score_lead(company):
+    score = 0
+
+    # Company size signals budget
+    emp_count = company.get("employee_count", "")
+    if "100" in emp_count or "500" in emp_count:
+        score += 20
+    if "1000" in emp_count:
+        score += 30
+
+    # Active hiring signals growth
+    hiring = company.get("hiring_signals", {})
+    if hiring.get("job_count", 0) > 5:
+        score += 15
+    if hiring.get("job_count", 0) > 20:
+        score += 25
+
+    # Technology fit (example: target companies using React)
+    techs = company.get("technologies", [])
+    if "React" in techs:
+        score += 10
+    if "HubSpot" in techs:
+        score += 10
+
+    # Has leadership data (easier to contact)
+    if company.get("leadership"):
+        score += 10
+
+    company["lead_score"] = score
+    return company
+
+enriched = [score_lead(c) for c in enriched]
+enriched.sort(key=lambda x: x["lead_score"], reverse=True)
+
+for company in enriched[:10]:
+    print(f"{company['name']}: Score {company['lead_score']}")
+    print(f"  Employees: {company.get('employee_count', 'Unknown')}")
+    print(f"  Technologies: {', '.join(company.get('technologies', []))}")
+    print(f"  Hiring: {company['hiring_signals']['job_count']} open roles")
+```
+
+### Step 5: Export to CRM
+
+```python
+import csv
+import json
+
+# CSV for CRM import (Salesforce, HubSpot, Pipedrive)
+fields = ["name", "domain", "headquarters", "employee_count",
+          "founded", "lead_score"]
+
+with open("leads.csv", "w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(enriched)
+
+# JSON for complete data (including nested fields)
+with open("leads.json", "w", encoding="utf-8") as f:
+    json.dump(enriched, f, indent=2, ensure_ascii=False)
+
+print(f"Exported {len(enriched)} leads")
+```
+
+## Scaling with Crawling
+
+For larger lead generation campaigns, crawl entire directories rather than scraping individual company pages.
+
+```python
+# Crawl a business directory to discover companies
+result = reader.read(
+    url="https://directory.example.com/software-companies",
+    max_depth=2,
+    max_pages=200
+)
+
+# Each page may contain multiple company listings
+for page in result.data:
+    # Extract company data from directory listings
+    companies = reader.read(
+        url=page.url,
+        extract={
+            "schema": {
+                "companies": [{
+                    "name": "string",
+                    "website": "string",
+                    "industry": "string",
+                    "location": "string",
+                }]
+            }
+        }
+    )
+    # Add to seed list for enrichment
+```
+
+Reader's crawling discovers pages automatically via BFS link discovery. URL pattern filtering (includePatterns, excludePatterns) targets specific sections of a directory and skips irrelevant pages.
+
+## Browser Sessions for Protected Sources
+
+Some lead data sources require login or interaction. Reader's browser sessions handle authenticated scraping.
+
+```python
+from playwright.sync_api import sync_playwright
+
+session = reader.sessions.create()
+
+with sync_playwright() as p:
+    browser = p.chromium.connect_over_cdp(session.ws_endpoint)
+    page = browser.contexts[0].pages[0]
+
+    # Log in to a business directory
+    page.goto("https://directory.example.com/login")
+    page.fill("#email", "user@example.com")
+    page.fill("#password", "password")
+    page.click("button[type='submit']")
+    page.wait_for_url("**/dashboard")
+
+    # Now scrape authenticated company profiles
+    page.goto("https://directory.example.com/company/acme-corp")
+    # Extract from the authenticated page
+    content = page.content()
+
+    browser.close()
+
+reader.sessions.stop(session.session_id)
+```
+
+The stealth layer (browser fingerprint generation, identity randomization, and proxy rotation) reduces the chance of detection when accessing protected directories.
+
+## Batch Enrichment
+
+For enriching hundreds of companies simultaneously, use Reader's batch scraping:
+
+```python
+# Build URLs for all seed companies
+urls = [f"https://{c['domain']}/about" for c in seed_companies]
+
+# Batch scrape (up to 1,000 URLs in parallel)
+result = reader.read(urls=urls)
+
+for page in result.data:
+    domain = page.url.split("/")[2]
+    company = next(c for c in seed_companies if c["domain"] == domain)
+    company["about_markdown"] = page.markdown
+    print(f"Scraped: {company['name']}")
+```
+
+Batch requests process URLs in parallel as an async job. The SDK handles polling automatically. For 500 company about pages, batch scraping completes in minutes rather than the hours that sequential scraping would take.
+
+## Legal and Ethical Considerations
+
+Lead generation scraping involves collecting information about real companies and potentially real people. Legal compliance is critical.
+
+### What You Can Collect
+
+Publicly displayed company information (company names, addresses, phone numbers, industry, publicly listed team members) is generally considered factual data. Business directories and company websites publish this information intentionally for public consumption.
+
+### What Requires Caution
+
+**Personal contact information.** Email addresses, phone numbers, and other personal data are subject to privacy regulations. GDPR (EU), CCPA (California), and similar laws regulate how personal data is collected, stored, and used. Consent and legitimate interest requirements vary by jurisdiction.
+
+**LinkedIn data.** LinkedIn's Terms of Service restrict automated access. The hiQ v. LinkedIn case addressed some aspects of accessing publicly available LinkedIn data, but the legal landscape continues to evolve.
+
+**Email usage.** Even if you collect email addresses legally, sending unsolicited commercial email is regulated by CAN-SPAM (US), CASL (Canada), GDPR (EU), and similar laws. Compliance requires opt out mechanisms, accurate sender information, and clear identification as commercial.
+
+### Best Practices
+
+Collect only data you have a legitimate business need for. Provide opt out mechanisms in any outreach. Maintain a suppression list of contacts who have requested no contact. Document your data sources and collection methods. Consult legal counsel for your specific jurisdiction and use case. Review each source's terms of service before scraping.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## Conclusion
+
+Web scraping transforms lead generation from manual research into automated data collection. Company websites provide firmographics and leadership data. Job boards reveal hiring signals and technology stacks. Business directories provide discovery and industry classification. Technology detection identifies buying signals.
+
+The most effective lead generation pipelines combine multiple data sources: scrape company websites for firmographics, extract job postings for hiring signals, detect technology stacks for buying intent, score and prioritize leads, and export to CRM. Reader's unified API handles the scraping, crawling, extraction, and browser automation across all these sources through a single platform.

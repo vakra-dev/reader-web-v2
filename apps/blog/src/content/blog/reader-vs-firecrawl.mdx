@@ -78,7 +78,7 @@ curl -X POST https://api.reader.dev/v1/read \
 
 This is the biggest practical difference between the two platforms.
 
-**Reader** includes cloud browser sessions as a first class primitive. You create a session through the API and get back a CDP (Chrome DevTools Protocol) endpoint. Your existing Playwright or Puppeteer scripts connect directly without modification. You can log into portals, navigate authenticated dashboards, fill forms, download files, and hold sessions for extended periods. The browser includes anti detection features including TLS fingerprinting, navigator spoofing, and WebRTC masking.
+**Reader** includes cloud browser sessions as a first class primitive. You create a session through the API and get back a CDP (Chrome DevTools Protocol) endpoint. Your existing Playwright or Puppeteer scripts connect directly without modification. You can log into portals, navigate authenticated dashboards, fill forms, download files, and hold sessions for extended periods. The browser includes anti detection features including browser fingerprint generation, identity randomization, and proxy rotation.
 
 ```javascript
 import { ReaderClient } from "@vakra-dev/reader-js";

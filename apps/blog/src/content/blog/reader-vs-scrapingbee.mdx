@@ -80,7 +80,7 @@ with sync_playwright() as p:
     page.goto("https://example.com/dashboard")
 ```
 
-This means you can log into a vendor portal, navigate through multiple authenticated pages, fill out forms, download files, and maintain session state across many interactions. The browser session persists for as long as you need it. Anti detection features including TLS fingerprinting, navigator spoofing, and WebRTC masking are built into the browser sessions.
+This means you can log into a vendor portal, navigate through multiple authenticated pages, fill out forms, download files, and maintain session state across many interactions. The browser session persists for as long as you need it. Anti detection features including browser fingerprint generation, identity randomization, and proxy rotation are built into the browser sessions.
 
 For teams that need to automate authenticated workflows (logging into client dashboards, navigating internal tools, interacting with platforms that have no API), Reader's browser sessions are a capability that ScrapingBee does not offer. For teams that just need to click a cookie banner before scraping a page, ScrapingBee's JavaScript scenarios work fine.
 
@@ -124,7 +124,7 @@ ScrapingBee provides proxy rotation across datacenter, premium, and stealth prox
 
 In the Scrapeway independent benchmark from June 2026, which tested 8 scraping APIs across 12 target websites with over 1,000 requests each, ScrapingBee scored 39% overall success, ranking 6th out of 8 APIs tested. It achieved a fast average response time of 2.8 seconds. Notable gaps included 0% success on several heavily protected sites in earlier benchmark rounds.
 
-Reader includes tiered proxy escalation that automatically moves from host IP to datacenter proxy to residential proxy based on response signals. Browser sessions include TLS fingerprinting, navigator spoofing, and WebRTC masking for anti detection. Reader does not yet have independent benchmark data published, and we want to be transparent about that. Anti bot performance varies significantly by target site, and we recommend testing with your actual URLs on both platforms.
+Reader includes datacenter and residential proxy pools for IP reputation management. Browser sessions include browser fingerprint generation, identity randomization, and proxy rotation for anti detection. Reader does not yet have independent benchmark data published, and we want to be transparent about that. Anti bot performance varies significantly by target site, and we recommend testing with your actual URLs on both platforms.
 
 ## Integrations and Ecosystem
 

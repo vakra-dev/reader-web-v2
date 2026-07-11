@@ -1,0 +1,569 @@
+---
+title: "Web Scraping in Rust: Performance-First Guide (2026)"
+description: "Learn web scraping in Rust with reqwest, scraper, chromiumoxide, and Supermarkdown. From HTML parsing to browser automation and managed scraping with Reader."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Guides"
+keywords: ["web scraping rust", "rust web scraper", "reqwest scraping", "scraper crate rust"]
+schemaType: "howto"
+faq:
+  - question: "Is Rust good for web scraping?"
+    answer: "Rust excels at web scraping when performance, memory efficiency, and deployment simplicity are priorities. The type system catches extraction errors at compile time. Zero cost async handles concurrent requests efficiently. Compiled binaries deploy without runtime dependencies. The main disadvantage is development speed: Rust's learning curve is steeper than Python or JavaScript, and the scraping ecosystem is smaller."
+  - question: "What is Supermarkdown?"
+    answer: "Supermarkdown is an HTML to markdown conversion engine built in Rust. It uses html5ever (the Firefox HTML parser) for malformed HTML recovery and performs single pass O(n) conversion. It is available as a Rust crate (supermarkdown on crates.io) and an npm package (@vakra-dev/supermarkdown). Reader uses Supermarkdown for all HTML to markdown conversion. It is open source under the MIT license at supermarkdown.dev."
+  - question: "Can Rust scrape JavaScript rendered pages?"
+    answer: "Yes, through chromiumoxide, which drives Chrome via the Chrome DevTools Protocol. For managed JavaScript rendering without running a browser in your Rust application, Reader's API handles rendering and returns clean markdown through a simple HTTP POST."
+  - question: "How does Rust compare to Python for web scraping?"
+    answer: "Rust is significantly faster, uses less memory, and catches errors at compile time. Python has a much larger ecosystem of scraping libraries, more community resources, and faster development iteration. Use Rust when throughput and resource efficiency matter at scale. Use Python for prototyping, smaller projects, and when development speed is the priority."
+---
+
+Rust is the performance choice for web scraping. Zero cost abstractions, no garbage collector pauses, and memory safety without a runtime make Rust ideal for high throughput scraping pipelines where consistent latency matters more than development speed. A Rust scraper processing a million pages runs in predictable time without the GC spikes that plague Java and Go scrapers or the single threaded bottleneck of Python.
+
+This guide covers three approaches: reqwest with the scraper crate for static HTML, chromiumoxide for JavaScript rendered pages, and Supermarkdown for HTML to markdown conversion. It also shows how Rust connects to Reader's API for managed scraping and how Supermarkdown, Reader's own conversion engine, fits into Rust scraping pipelines.
+
+## Prerequisites
+
+Rust 1.75 or newer with Cargo. Create a new project:
+
+```bash
+cargo new scraper_project
+cd scraper_project
+```
+
+Add dependencies to `Cargo.toml`:
+
+```toml
+[dependencies]
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+scraper = "0.21"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+```
+
+All examples in this guide use tokio for async runtime. The blocking examples use `reqwest::blocking` for simplicity in early sections.
+
+## Method 1: reqwest and scraper
+
+reqwest is Rust's most popular HTTP client. The scraper crate provides CSS selector based HTML parsing. Together they handle static HTML scraping with the performance characteristics you expect from Rust.
+
+### Basic Request and Parse
+
+```rust
+use reqwest::blocking;
+use scraper::{Html, Selector};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = blocking::Client::builder()
+        .user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+             AppleWebKit/537.36 (KHTML, like Gecko) \
+             Chrome/126.0.0.0 Safari/537.36"
+        )
+        .build()?;
+
+    let response = client.get("https://books.toscrape.com/")
+        .send()?;
+
+    if response.status() != 200 {
+        eprintln!("Failed: {}", response.status());
+        return Ok(());
+    }
+
+    let body = response.text()?;
+    let document = Html::parse_document(&body);
+
+    let book_selector = Selector::parse("article.product_pod").unwrap();
+    let title_selector = Selector::parse("h3 a").unwrap();
+    let price_selector = Selector::parse(".price_color").unwrap();
+
+    let mut count = 0;
+    for element in document.select(&book_selector) {
+        let title = element
+            .select(&title_selector)
+            .next()
+            .and_then(|el| el.value().attr("title"))
+            .unwrap_or("Unknown");
+
+        let price = element
+            .select(&price_selector)
+            .next()
+            .map(|el| el.text().collect::<String>())
+            .unwrap_or_default();
+
+        println!("{}: {}", title, price.trim());
+        count += 1;
+    }
+
+    println!("\nFound {} books", count);
+    Ok(())
+}
+```
+
+Output:
+```
+A Light in the Attic: £51.77
+Tipping the Velvet: £53.74
+Soumission: £50.10
+Sharp Objects: £47.82
+Sapiens: A Brief History of Humankind: £54.23
+... (15 more)
+
+Found 20 books
+```
+
+The scraper crate compiles CSS selectors at parse time using `Selector::parse`. The `select` method returns an iterator over matching elements. Rust's `Option` and `Result` types enforce handling of missing elements at compile time. You cannot accidentally call `.text()` on a None element because the compiler rejects it. This is a meaningful advantage over Python and JavaScript where missing element errors only appear at runtime.
+
+### Extracting Structured Data
+
+Define a struct for your scraped data:
+
+```rust
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Book {
+    title: String,
+    price: String,
+    rating: String,
+    url: String,
+    in_stock: bool,
+}
+
+fn extract_books(document: &Html) -> Vec<Book> {
+    let book_sel = Selector::parse("article.product_pod").unwrap();
+    let title_sel = Selector::parse("h3 a").unwrap();
+    let price_sel = Selector::parse(".price_color").unwrap();
+    let rating_sel = Selector::parse(".star-rating").unwrap();
+    let stock_sel = Selector::parse(".instock").unwrap();
+
+    document.select(&book_sel).map(|el| {
+        let title = el.select(&title_sel).next()
+            .and_then(|a| a.value().attr("title"))
+            .unwrap_or("Unknown")
+            .to_string();
+
+        let price = el.select(&price_sel).next()
+            .map(|p| p.text().collect::<String>())
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+
+        let rating = el.select(&rating_sel).next()
+            .and_then(|p| {
+                p.value().classes()
+                    .find(|c| *c != "star-rating")
+                    .map(|c| c.to_string())
+            })
+            .unwrap_or_default();
+
+        let url = el.select(&title_sel).next()
+            .and_then(|a| a.value().attr("href"))
+            .unwrap_or("")
+            .to_string();
+
+        let in_stock = el.select(&stock_sel).next().is_some();
+
+        Book { title, price, rating, url, in_stock }
+    }).collect()
+}
+```
+
+Rust's type system ensures every field is populated. The `Option` chain (`and_then`, `map`, `unwrap_or`) handles missing elements gracefully without panicking. If a field is absent, it gets a default value rather than crashing.
+
+### Async Scraping with tokio
+
+For production scrapers, use async reqwest with tokio for concurrent requests:
+
+```rust
+use reqwest;
+use scraper::{Html, Selector};
+use tokio;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...")
+        .build()?;
+
+    let response = client
+        .get("https://books.toscrape.com/")
+        .send()
+        .await?;
+
+    let body = response.text().await?;
+    let document = Html::parse_document(&body);
+
+    let books = extract_books(&document);
+    println!("Found {} books", books.len());
+
+    Ok(())
+}
+```
+
+### Concurrent Scraping
+
+Rust's async model makes concurrent scraping straightforward and efficient. Unlike Python's GIL or Go's goroutine scheduler, Rust's async tasks are true zero cost abstractions compiled to state machines:
+
+```rust
+use futures::future::join_all;
+use std::sync::Arc;
+use tokio::time::{sleep, Duration};
+use rand::Rng;
+
+async fn scrape_page(
+    client: &reqwest::Client,
+    url: &str,
+) -> Option<Vec<Book>> {
+    let response = client.get(url).send().await.ok()?;
+
+    if response.status() != 200 {
+        eprintln!("Failed {}: {}", url, response.status());
+        return None;
+    }
+
+    let body = response.text().await.ok()?;
+    let document = Html::parse_document(&body);
+    let books = extract_books(&document);
+
+    // Random delay
+    let delay = rand::thread_rng().gen_range(500..2000);
+    sleep(Duration::from_millis(delay)).await;
+
+    Some(books)
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = Arc::new(
+        reqwest::Client::builder()
+            .user_agent("Mozilla/5.0 ...")
+            .build()?
+    );
+
+    let urls: Vec<String> = (1..=50)
+        .map(|i| format!(
+            "https://books.toscrape.com/catalogue/page-{}.html", i
+        ))
+        .collect();
+
+    // Limit concurrency with semaphore
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(5));
+
+    let tasks: Vec<_> = urls.iter().map(|url| {
+        let client = Arc::clone(&client);
+        let sem = Arc::clone(&semaphore);
+        let url = url.clone();
+
+        tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
+            scrape_page(&client, &url).await
+        })
+    }).collect();
+
+    let results = join_all(tasks).await;
+
+    let all_books: Vec<Book> = results
+        .into_iter()
+        .filter_map(|r| r.ok().flatten())
+        .flatten()
+        .collect();
+
+    println!("Scraped {} books from {} pages", all_books.len(), urls.len());
+
+    Ok(())
+}
+```
+
+The semaphore limits concurrency to 5 simultaneous requests. Each task acquires a permit before making a request and releases it when done. This prevents overwhelming the target server while fully utilizing async I/O.
+
+Rust's zero cost async means each task uses minimal memory (no 2KB goroutine stack, no Python thread overhead). You can run thousands of concurrent scraping tasks with minimal resource usage.
+
+### Saving Results
+
+```rust
+use std::fs::File;
+use std::io::Write;
+
+// JSON
+fn save_json(books: &[Book], filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let json = serde_json::to_string_pretty(books)?;
+    let mut file = File::create(filename)?;
+    file.write_all(json.as_bytes())?;
+    Ok(())
+}
+
+// CSV
+fn save_csv(books: &[Book], filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut wtr = csv::Writer::from_path(filename)?;
+    for book in books {
+        wtr.serialize(book)?;
+    }
+    wtr.flush()?;
+    Ok(())
+}
+```
+
+Add `csv = "1"` to your Cargo.toml for CSV support. The `#[derive(Serialize)]` on the Book struct enables automatic CSV serialization through serde.
+
+### Limitations of reqwest and scraper
+
+Like every static HTTP library, reqwest cannot render JavaScript. Sites built with React, Vue, or Next.js return empty HTML shells. The scraper crate parses the initial response, which contains no dynamic content.
+
+Rust's reqwest also produces a non browser TLS fingerprint. [Anti bot systems](/blog/anti-bot-detection) that check JA3/JA4 fingerprints detect reqwest regardless of what User Agent header you set. For protected sites, you need a real browser.
+
+## Method 2: chromiumoxide
+
+chromiumoxide is a Rust library for controlling Chrome via the Chrome DevTools Protocol. It provides async, strongly typed bindings for browser automation.
+
+```toml
+[dependencies]
+chromiumoxide = { version = "0.7", features = ["tokio-runtime"] }
+```
+
+Chrome or Chromium must be installed on the system.
+
+### Basic Browser Scraping
+
+```rust
+use chromiumoxide::Browser;
+use chromiumoxide::browser::BrowserConfig;
+use futures::StreamExt;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let (mut browser, mut handler) = Browser::launch(
+        BrowserConfig::builder()
+            .arg("--headless=new")
+            .arg("--disable-gpu")
+            .arg("--no-sandbox")
+            .build()
+            .map_err(|e| format!("Config error: {}", e))?,
+    ).await?;
+
+    // Spawn the handler task
+    let handle = tokio::spawn(async move {
+        while let Some(event) = handler.next().await {
+            if event.is_err() {
+                break;
+            }
+        }
+    });
+
+    let page = browser.new_page("https://books.toscrape.com/").await?;
+    page.wait_for_navigation().await?;
+
+    // Execute JavaScript in the browser
+    let titles: Vec<String> = page.evaluate(
+        r#"
+        Array.from(document.querySelectorAll('article.product_pod h3 a'))
+            .map(a => a.getAttribute('title'))
+        "#
+    ).await?.into_value()?;
+
+    for title in &titles {
+        println!("{}", title);
+    }
+
+    println!("\nFound {} books", titles.len());
+
+    browser.close().await?;
+    handle.await?;
+    Ok(())
+}
+```
+
+chromiumoxide uses Rust's async/await with tokio. The browser handler runs as a separate task that processes CDP events. The `evaluate` method runs JavaScript in the browser context and deserializes the result into Rust types.
+
+### When to Use chromiumoxide
+
+Use chromiumoxide when you need JavaScript rendering in a Rust application and want to stay in the Rust ecosystem. It gives you the same CDP capabilities as Playwright or Puppeteer but with Rust's performance characteristics and type safety.
+
+The tradeoff is the same as any browser automation: each Chrome instance uses significant memory, and page loads are slower than HTTP requests. chromiumoxide is also less mature than Playwright, with a smaller community and fewer examples.
+
+## Supermarkdown: HTML to Markdown in Rust
+
+Supermarkdown is Reader's HTML to markdown conversion engine, built from scratch in Rust. If your scraping pipeline needs to convert HTML to clean markdown for LLM consumption, Supermarkdown is the native Rust solution.
+
+```toml
+[dependencies]
+supermarkdown = "0.0.6"
+```
+
+### Basic Conversion
+
+```rust
+use supermarkdown::{convert, Options};
+
+fn main() {
+    let html = r#"
+        <h1>Product Review</h1>
+        <p>This is a <strong>great</strong> product with many features.</p>
+        <ul>
+            <li>Feature A</li>
+            <li>Feature B</li>
+            <li>Feature C</li>
+        </ul>
+        <table>
+            <tr><th>Spec</th><th>Value</th></tr>
+            <tr><td>Weight</td><td>500g</td></tr>
+            <tr><td>Color</td><td>Blue</td></tr>
+        </table>
+    "#;
+
+    let markdown = convert(html, None);
+    println!("{}", markdown);
+}
+```
+
+Output:
+```markdown
+# Product Review
+
+This is a **great** product with many features.
+
+- Feature A
+- Feature B
+- Feature C
+
+| Spec | Value |
+| --- | --- |
+| Weight | 500g |
+| Color | Blue |
+```
+
+### With Options
+
+```rust
+let options = Options {
+    base_url: Some("https://example.com".into()),
+    exclude_selectors: Some(vec![
+        "nav".into(), ".sidebar".into(), ".footer".into()
+    ]),
+    ..Default::default()
+};
+
+let markdown = convert(html, Some(options));
+```
+
+The `exclude_selectors` option strips navigation, sidebars, and footers during conversion. This is content extraction and markdown conversion in a single pass, eliminating the need for a separate Readability step.
+
+Supermarkdown uses html5ever (the same HTML parser Firefox uses) for browser grade malformed HTML recovery. Real world web HTML with unclosed tags, incorrect nesting, and CMS mangled markup is handled correctly. The single pass O(n) traversal pre computes all metadata (list indices, CSS selectors) in one pass, then converts with O(1) lookups.
+
+### Combining reqwest, scraper, and Supermarkdown
+
+A complete Rust scraping pipeline: fetch with reqwest, extract specific data with scraper, and convert the full page to markdown with Supermarkdown:
+
+```rust
+use reqwest;
+use scraper::{Html, Selector};
+use supermarkdown::{convert, Options};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 ...")
+        .build()?;
+
+    let response = client
+        .get("https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html")
+        .send()
+        .await?;
+
+    let html = response.text().await?;
+
+    // Extract structured data with scraper
+    let document = Html::parse_document(&html);
+    let title_sel = Selector::parse("h1").unwrap();
+    let title = document.select(&title_sel).next()
+        .map(|el| el.text().collect::<String>())
+        .unwrap_or_default();
+
+    println!("Title: {}", title.trim());
+
+    // Convert full page to markdown with Supermarkdown
+    let options = Options {
+        exclude_selectors: Some(vec![
+            "nav".into(), "header".into(), "footer".into()
+        ]),
+        ..Default::default()
+    };
+    let markdown = convert(&html, Some(options));
+
+    println!("\nMarkdown ({} chars):\n{}", markdown.len(), &markdown[..500]);
+
+    Ok(())
+}
+```
+
+This is the unique angle for a Rust scraping article. No other language tutorial can claim that the markdown conversion engine itself is written in Rust and available as a native crate. Python and JavaScript scrapers need to call an external tool or API for clean markdown. Rust scrapers can do it natively with Supermarkdown.
+
+## Using Reader from Rust
+
+Reader does not have an official Rust SDK. You integrate through the REST API using reqwest:
+
+```rust
+use reqwest;
+use serde_json::json;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post("https://api.reader.dev/v1/read")
+        .header("Content-Type", "application/json")
+        .header("x-api-key", "rdr_your_api_key")
+        .json(&json!({
+            "url": "https://example.com"
+        }))
+        .send()
+        .await?;
+
+    let result: serde_json::Value = response.json().await?;
+
+    if let Some(markdown) = result["data"]["markdown"].as_str() {
+        println!("Markdown length: {} chars", markdown.len());
+        println!("{}", &markdown[..std::cmp::min(500, markdown.len())]);
+    }
+
+    Ok(())
+}
+```
+
+Reader handles JavaScript rendering, [anti bot bypass](/blog/anti-bot-detection), proxy rotation, and markdown conversion in a single HTTP call. For Rust developers who want managed scraping without managing browser pools, proxies, and stealth configurations, Reader provides the infrastructure through a simple REST API.
+
+For crawling, add `maxDepth` and `maxPages` to the request body:
+
+```rust
+let response = client
+    .post("https://api.reader.dev/v1/read")
+    .header("x-api-key", "rdr_your_api_key")
+    .json(&json!({
+        "url": "https://docs.example.com",
+        "maxDepth": 3,
+        "maxPages": 100
+    }))
+    .send()
+    .await?;
+```
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine (and Supermarkdown) is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## When to Use Each Approach
+
+| Criteria | reqwest + scraper | chromiumoxide | Supermarkdown | Reader |
+|----------|------------------|---------------|---------------|--------|
+| JavaScript rendering | No | Yes | No (converter only) | Yes |
+| Anti bot bypass | No | Partial | N/A | Yes |
+| Speed | Fastest | Slow (browser) | Fastest (conversion) | Fast (managed) |
+| Memory | Minimal | 50 to 200MB/browser | Minimal | None (cloud) |
+| Malformed HTML | Crashes possible | Browser handles it | html5ever recovery | Handled |
+| Output | Parsed DOM | Rendered DOM | Clean markdown | Clean markdown |
+| Best for | Static HTML, high throughput | JS rendered pages | HTML to MD conversion | Production pipelines |
+
+## Conclusion
+
+Rust web scraping offers the highest performance ceiling of any language. reqwest with the scraper crate handles static HTML with zero overhead and compile time safety for missing elements. chromiumoxide provides CDP browser automation for JavaScript rendered pages. Supermarkdown, built specifically for web scraping pipelines, converts HTML to clean markdown with browser grade error recovery in a single pass.
+
+The unique advantage of Rust for web scraping is the combination of speed, memory efficiency, and type safety. A Rust scraper catches data extraction errors at compile time, runs without GC pauses, and produces binaries that deploy without runtime dependencies. For high throughput production pipelines processing millions of pages, these properties compound into a significant operational advantage.

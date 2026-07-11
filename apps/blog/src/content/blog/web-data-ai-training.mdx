@@ -1,0 +1,458 @@
+---
+title: "Web Data for AI Training and Fine-Tuning Pipelines"
+description: "Learn how to collect, clean, and prepare web data for LLM training and fine-tuning. Covers crawling strategies, data quality, deduplication, and compliance."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Use Cases"
+keywords: ["llm training data", "web scraping for llm", "ai training data", "fine tuning data collection"]
+schemaType: "article"
+faq:
+  - question: "How much web data do I need for fine tuning?"
+    answer: "It depends on the task. Instruction tuning works well with 1,000 to 50,000 high quality examples. Domain adaptation requires 10,000 to 1,000,000 pages of domain specific content. Continued pre training needs 1,000,000+ pages. Start small, evaluate, and scale up based on results."
+  - question: "Should I use markdown or plain text for training data?"
+    answer: "Markdown preserves structural information (headings, lists, code blocks, tables) that helps models learn document structure and formatting. Plain text loses this structure. For technical domains where code and structured content matter, markdown is preferred. For pure text understanding, either works."
+  - question: "How do I handle multilingual content?"
+    answer: "Filter by language during the cleaning step. Use a language detection library (langdetect, fasttext) to classify each page. Train separate models for different languages or include multilingual content deliberately for multilingual models. Ensure your tokenizer handles the target languages efficiently."
+---
+
+Every large language model is trained on web data. Common Crawl, the largest public web corpus, contains petabytes of text from billions of pages. OpenAI, Anthropic, Google, and Meta all use web sourced data in their training pipelines. The quality of the training data directly determines the quality of the resulting model.
+
+For teams fine tuning models on domain specific data (medical, legal, financial, technical), collecting high quality web corpora from targeted sources is a critical step. This guide covers how to build web data collection pipelines for AI training: what makes good training data, how to crawl at scale, cleaning and deduplication, format preparation, and compliance considerations.
+
+## What Makes Good Training Data
+
+Not all web content is useful for training. The quality dimensions that matter:
+
+### Content Quality
+
+**Information density.** Educational articles, technical documentation, research papers, and well edited publications contain dense, factual information. Forum posts, comment threads, and social media contain noise, repetition, and low quality text. Training data should skew toward high density sources.
+
+**Writing quality.** Grammatically correct, well structured, clearly written text produces better models than text with errors, slang, and fragmented sentences. Documentation sites, professional publications, and curated knowledge bases are higher quality sources than user generated content.
+
+**Factual accuracy.** Training on incorrect information teaches the model incorrect facts. Prioritize authoritative sources (academic institutions, government sites, reputable publishers, official documentation) over unverified content (personal blogs, forums, social media).
+
+### Diversity
+
+**Topic coverage.** A model fine tuned on only Python documentation will be strong on Python but weak on everything else. Include diverse topics within your target domain. A medical model needs content from multiple specialties, treatment types, and clinical contexts.
+
+**Source diversity.** Content from a single source (one website, one author, one publication) introduces stylistic bias. Collect from multiple independent sources to capture different perspectives, writing styles, and vocabularies.
+
+**Format diversity.** Articles, documentation, tutorials, Q&A pairs, reference materials, and technical specifications each contribute different types of knowledge. A model trained only on tutorials may struggle with reference queries.
+
+### Scale
+
+Fine tuning requires less data than pre training but still needs meaningful volume. Rough guidelines:
+
+**Instruction tuning.** 1,000 to 50,000 high quality instruction/response pairs. Web data provides the raw content that you convert into instruction format.
+
+**Domain adaptation.** 10,000 to 1,000,000 pages of domain specific content. Enough for the model to learn domain vocabulary, concepts, and reasoning patterns.
+
+**Continued pre training.** 1,000,000+ pages. Effectively extending the model's knowledge in a specific domain. Requires significant compute alongside the data.
+
+## Crawling Strategies for Training Data
+
+### Strategy 1: Targeted Domain Crawling
+
+Crawl specific authoritative sites in your target domain. This produces the highest quality data but requires curating a seed list.
+
+```python
+from reader_py import ReaderClient
+
+reader = ReaderClient(api_key="rdr_your_api_key")
+
+# Seed list of authoritative sources
+sources = [
+    {"name": "Python Docs", "url": "https://docs.python.org/3/", "max_pages": 500},
+    {"name": "MDN Web Docs", "url": "https://developer.mozilla.org/en-US/", "max_pages": 1000},
+    {"name": "PostgreSQL Docs", "url": "https://www.postgresql.org/docs/current/", "max_pages": 300},
+    {"name": "Rust Book", "url": "https://doc.rust-lang.org/book/", "max_pages": 100},
+]
+
+all_pages = []
+
+for source in sources:
+    print(f"\nCrawling {source['name']}...")
+    result = reader.read(
+        url=source["url"],
+        max_depth=4,
+        max_pages=source["max_pages"],
+    )
+
+    for page in result.data:
+        all_pages.append({
+            "source": source["name"],
+            "url": page.url,
+            "markdown": page.markdown,
+            "title": page.metadata.title if page.metadata else "",
+            "char_count": len(page.markdown),
+        })
+
+    print(f"  Collected {len(result.data)} pages")
+
+print(f"\nTotal: {len(all_pages)} pages")
+print(f"Total content: {sum(p['char_count'] for p in all_pages):,} chars")
+```
+
+### Strategy 2: Broad Crawling with Quality Filters
+
+Crawl a wider set of domains and filter for quality afterward. This produces more data but requires post processing to remove low quality content.
+
+```python
+# Crawl a broader set of technical sites
+broad_sources = [
+    "https://engineering.atspotify.com/",
+    "https://netflixtechblog.com/",
+    "https://aws.amazon.com/blogs/architecture/",
+    "https://blog.cloudflare.com/",
+    "https://research.google/blog/",
+    # Add more engineering blogs, company tech blogs, etc.
+]
+
+for url in broad_sources:
+    result = reader.read(
+        url=url,
+        max_depth=2,
+        max_pages=50,
+    )
+
+    for page in result.data:
+        # Basic quality filter: skip very short pages
+        if len(page.markdown) < 500:
+            continue
+
+        all_pages.append({
+            "source": url,
+            "url": page.url,
+            "markdown": page.markdown,
+            "char_count": len(page.markdown),
+        })
+```
+
+### Strategy 3: Discover Then Crawl
+
+Use Reader's discover mode to find URLs without scraping content. Review the URL list, filter for relevant pages, then scrape only the relevant ones. This saves credits on pages you would discard.
+
+```python
+# Discover URLs without scraping content
+discovery = reader.read(
+    url="https://large-docs-site.com",
+    max_depth=3,
+    max_pages=5000,
+    scrape=False,  # Discover only, 1 credit flat
+)
+
+discovered_urls = [page.url for page in discovery.data]
+print(f"Discovered {len(discovered_urls)} URLs")
+
+# Filter by URL pattern
+relevant_urls = [
+    url for url in discovered_urls
+    if "/guide/" in url or "/tutorial/" in url or "/docs/" in url
+    and "/changelog" not in url
+    and "/release-notes" not in url
+]
+print(f"Filtered to {len(relevant_urls)} relevant URLs")
+
+# Batch scrape only relevant pages
+result = reader.read(urls=relevant_urls[:1000])
+```
+
+This is the most credit efficient approach for large sites. Discovery costs 1 credit flat regardless of how many URLs are found. You only spend per page credits on the pages you actually want.
+
+## Cleaning Web Data for Training
+
+Raw crawled content needs cleaning before it is suitable for training. Even clean markdown from Reader contains patterns that should be filtered.
+
+### Remove Boilerplate Content
+
+```python
+import re
+
+def clean_for_training(markdown):
+    # Remove navigation breadcrumbs
+    text = re.sub(r'^(Home|Docs|Guide)\s*[>»/]\s*.*$', '', markdown, flags=re.MULTILINE)
+
+    # Remove "Last updated" / "Edit this page" lines
+    text = re.sub(r'^(Last updated|Edit this page|Was this helpful|Share this).*$',
+                  '', text, flags=re.MULTILINE)
+
+    # Remove empty links and image references without context
+    text = re.sub(r'!\[.*?\]\(.*?\)', '', text)  # Remove images
+    text = re.sub(r'\[([^\]]+)\]\(\)', r'\1', text)  # Fix empty links
+
+    # Collapse multiple blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
+    # Remove very short lines (likely UI elements)
+    lines = text.split('\n')
+    lines = [l for l in lines if len(l.strip()) > 10 or l.strip() == '' or l.startswith('#')]
+    text = '\n'.join(lines)
+
+    return text.strip()
+
+# Clean all pages
+for page in all_pages:
+    page["clean_markdown"] = clean_for_training(page["markdown"])
+    page["clean_char_count"] = len(page["clean_markdown"])
+```
+
+### Quality Scoring
+
+Score each page on quality metrics to filter the bottom of the distribution:
+
+```python
+def quality_score(text):
+    score = 0.0
+
+    # Length: longer content is usually higher quality for training
+    char_count = len(text)
+    if char_count > 1000: score += 0.2
+    if char_count > 3000: score += 0.2
+    if char_count > 5000: score += 0.1
+
+    # Structure: headings indicate organized content
+    heading_count = text.count('\n#')
+    if heading_count > 2: score += 0.15
+    if heading_count > 5: score += 0.1
+
+    # Code blocks: valuable for technical training data
+    code_block_count = text.count('```')
+    if code_block_count > 0: score += 0.1
+    if code_block_count > 4: score += 0.1
+
+    # Paragraph density: ratio of substantial paragraphs to total lines
+    lines = [l for l in text.split('\n') if l.strip()]
+    long_lines = [l for l in lines if len(l) > 80]
+    if lines:
+        density = len(long_lines) / len(lines)
+        score += density * 0.15
+
+    return min(score, 1.0)
+
+# Score all pages
+for page in all_pages:
+    page["quality_score"] = quality_score(page["clean_markdown"])
+
+# Filter bottom 20%
+threshold = sorted([p["quality_score"] for p in all_pages])[len(all_pages) // 5]
+high_quality = [p for p in all_pages if p["quality_score"] >= threshold]
+print(f"Kept {len(high_quality)}/{len(all_pages)} pages above quality threshold")
+```
+
+### Deduplication
+
+Web crawls contain duplicate content: pages mirrored across subdomains, content syndicated across sites, and boilerplate text repeated on every page. Duplicates waste training compute and can bias the model.
+
+**Exact deduplication.** Hash each document and remove exact matches.
+
+```python
+import hashlib
+
+def deduplicate_exact(pages):
+    seen_hashes = set()
+    unique = []
+
+    for page in pages:
+        content_hash = hashlib.md5(
+            page["clean_markdown"].encode()
+        ).hexdigest()
+
+        if content_hash not in seen_hashes:
+            seen_hashes.add(content_hash)
+            unique.append(page)
+
+    return unique
+
+deduped = deduplicate_exact(high_quality)
+print(f"After exact dedup: {len(deduped)} pages "
+      f"(removed {len(high_quality) - len(deduped)} duplicates)")
+```
+
+**Near deduplication.** Content that is 90% identical (same article with minor edits, templated pages with different product names) should also be removed. MinHash with LSH (Locality Sensitive Hashing) is the standard approach for large scale near deduplication.
+
+```python
+# For production near-dedup, use datasketch
+# pip install datasketch
+from datasketch import MinHash, MinHashLSH
+
+def create_minhash(text, num_perm=128):
+    m = MinHash(num_perm=num_perm)
+    # Create shingles (3-word sequences)
+    words = text.lower().split()
+    for i in range(len(words) - 2):
+        shingle = " ".join(words[i:i+3])
+        m.update(shingle.encode("utf-8"))
+    return m
+
+# Build LSH index
+lsh = MinHashLSH(threshold=0.8, num_perm=128)
+minhashes = {}
+
+for i, page in enumerate(deduped):
+    mh = create_minhash(page["clean_markdown"])
+    minhashes[i] = mh
+
+    # Check for near-duplicates
+    duplicates = lsh.query(mh)
+    if not duplicates:
+        lsh.insert(str(i), mh)
+    else:
+        page["is_near_duplicate"] = True
+
+near_deduped = [p for p in deduped if not p.get("is_near_duplicate")]
+print(f"After near dedup: {len(near_deduped)} pages")
+```
+
+## Preparing Data for Training
+
+### Format: JSONL
+
+The standard format for training data is JSON Lines (one JSON object per line). Each object contains the text and metadata.
+
+```python
+import json
+
+with open("training_data.jsonl", "w", encoding="utf-8") as f:
+    for page in near_deduped:
+        record = {
+            "text": page["clean_markdown"],
+            "source": page["source"],
+            "url": page["url"],
+            "quality_score": page["quality_score"],
+        }
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+# Calculate statistics
+total_chars = sum(len(p["clean_markdown"]) for p in near_deduped)
+total_words = sum(len(p["clean_markdown"].split()) for p in near_deduped)
+
+print(f"Training data: {len(near_deduped)} documents")
+print(f"Total: {total_chars:,} chars / {total_words:,} words")
+print(f"Average: {total_chars // len(near_deduped):,} chars per document")
+```
+
+### Format: Instruction Pairs
+
+For instruction tuning, convert web content into question/answer pairs. An LLM can generate these from the source content:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+def generate_qa_pairs(text, num_pairs=3):
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=2000,
+        messages=[{
+            "role": "user",
+            "content": f"""Generate {num_pairs} question-answer pairs from this documentation.
+Each pair should test understanding of a specific concept explained in the text.
+Format as JSON array: [{{"question": "...", "answer": "..."}}]
+
+Text:
+{text[:3000]}"""
+        }],
+    )
+
+    try:
+        pairs = json.loads(response.content[0].text
+                          .replace("```json", "").replace("```", ""))
+        return pairs
+    except:
+        return []
+
+# Generate instruction pairs from high-quality pages
+instruction_data = []
+for page in near_deduped[:100]:  # Start with top 100 pages
+    pairs = generate_qa_pairs(page["clean_markdown"])
+    for pair in pairs:
+        pair["source_url"] = page["url"]
+        instruction_data.append(pair)
+
+print(f"Generated {len(instruction_data)} instruction pairs")
+
+# Save as JSONL
+with open("instruction_data.jsonl", "w", encoding="utf-8") as f:
+    for pair in instruction_data:
+        f.write(json.dumps(pair, ensure_ascii=False) + "\n")
+```
+
+### Token Counting
+
+Estimate token usage before training:
+
+```python
+import tiktoken
+
+enc = tiktoken.get_encoding("cl100k_base")
+
+total_tokens = 0
+for page in near_deduped:
+    tokens = len(enc.encode(page["clean_markdown"]))
+    page["token_count"] = tokens
+    total_tokens += tokens
+
+print(f"Total tokens: {total_tokens:,}")
+print(f"Average tokens per document: {total_tokens // len(near_deduped):,}")
+```
+
+## Self Hosting for Data Sovereignty
+
+Training data pipelines often have data sovereignty requirements. The data being collected may be proprietary, sensitive, or subject to regulatory restrictions on where it can be processed.
+
+Reader's open source engine (Apache 2.0) can be [self hosted](/blog/self-host-reader) on your own infrastructure. When self hosted, data never leaves your network. The crawling, JavaScript rendering, content extraction, and markdown conversion all happen on your servers.
+
+```bash
+# Self-host Reader
+npm install @vakra-dev/reader
+npx reader start --direct-pool-size 5
+```
+
+Self hosting eliminates the data flow through Reader's managed cloud, which matters for teams building training datasets from proprietary or regulated content.
+
+## Compliance and Ethics
+
+Web data collection for AI training raises legal and ethical considerations that vary by jurisdiction.
+
+### robots.txt
+
+The robots.txt file indicates which parts of a site the owner wants crawlers to access. Respecting robots.txt is an industry norm. Many AI training datasets have faced criticism for ignoring robots.txt directives. Check and respect each target site's robots.txt before crawling.
+
+```python
+import urllib.robotparser
+
+def check_robots(url):
+    rp = urllib.robotparser.RobotFileParser()
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
+    rp.set_url(robots_url)
+    rp.read()
+    return rp.can_fetch("*", url)
+
+# Check before crawling
+for source in sources:
+    allowed = check_robots(source["url"])
+    print(f"{source['name']}: {'Allowed' if allowed else 'Blocked by robots.txt'}")
+```
+
+### Copyright
+
+Web content is copyrighted by default. Using copyrighted content for AI training is subject to ongoing legal debate and varies by jurisdiction. The US Copyright Office has issued guidance but no definitive ruling on fair use for AI training. The EU AI Act has provisions for text and data mining that differ from US law.
+
+### Terms of Service
+
+Many websites restrict automated access in their terms of service. Scraping for AI training may violate these terms even when the content is publicly accessible. Review each source's terms before collecting data.
+
+### Best Practices
+
+Respect robots.txt directives. Document your data sources, collection methods, and intended use. Maintain a record of which content came from which source. Consider opt out mechanisms for content creators. Consult legal counsel for your specific jurisdiction and use case. Be transparent about your training data practices.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## Conclusion
+
+Building web data pipelines for AI training requires more than just crawling. The quality of training data is determined by source selection (authoritative, diverse, high density), content cleaning (removing boilerplate, filtering low quality pages, scoring content), deduplication (exact and near duplicate removal), and format preparation (JSONL for pre training, instruction pairs for fine tuning).
+
+Reader's markdown output is well suited for training data because it is clean (no HTML tags, scripts, or navigation), structured (headings, lists, and code blocks preserved), and token efficient (67 to 87 percent fewer tokens than raw HTML). Self hosting under Apache 2.0 provides data sovereignty for teams with regulatory requirements.

@@ -65,7 +65,7 @@ The tradeoff is that every AI powered action requires LLM inference. This adds l
 
 Reader's architecture gives you the raw CDP connection to a cloud hosted browser. You write standard Playwright or Puppeteer code against Reader's managed browser that has stealth features baked in. There is no AI layer between you and the browser.
 
-This is powerful for workflows where you know exactly what to do. Logging into a known portal, navigating a specific dashboard, filling a form with defined fields. Your existing Playwright scripts connect to Reader's CDP endpoint and work without modification. The stealth layer (TLS fingerprinting, WebRTC masking, proxy rotation) handles anti bot detection transparently.
+This is powerful for workflows where you know exactly what to do. Logging into a known portal, navigating a specific dashboard, filling a form with defined fields. Your existing Playwright scripts connect to Reader's CDP endpoint and work without modification. The stealth layer (browser fingerprint generation, identity randomization, and proxy rotation) handles anti bot detection transparently.
 
 The tradeoff is that you are responsible for writing the automation logic. If a site changes its selectors, your script breaks until you update it. There is no AI self healing. But there is also no LLM inference cost per action, no latency from AI processing, and no dependency on model availability.
 

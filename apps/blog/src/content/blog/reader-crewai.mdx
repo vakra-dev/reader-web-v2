@@ -1,0 +1,415 @@
+---
+title: "Building Web-Aware Agents with CrewAI and Reader"
+description: "Learn how to give CrewAI agents web access using Reader. Build multi-agent crews that scrape, crawl, extract, and analyze live web data."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Ecosystem"
+keywords: ["crewai web scraping", "crewai reader", "multi agent web access", "crewai tools"]
+schemaType: "article"
+faq:
+  - question: "How many Reader credits does a typical crew use?"
+    answer: "It depends on the workflow. A competitor analysis crew that scrapes 6 pages uses 6 credits. A content gap analysis crew that crawls 2 blogs at 30 pages each uses 60 credits. A lead research crew that scrapes 3 pages per prospect uses 3 credits per prospect. The free tier (1,000 credits per month) covers most development and moderate production use."
+  - question: "Should every agent have web tools?"
+    answer: "No. Only the researcher agent needs web tools. Analyst and writer agents work with the data the researcher provides through CrewAI's context passing. Giving every agent scraping tools leads to redundant web requests and wasted credits."
+  - question: "Can CrewAI agents use Reader's browser sessions?"
+    answer: "Yes, but it requires a custom tool that creates a session, connects Playwright, performs actions, and returns the results. This is more complex than the scrape/extract/crawl tools and is best reserved for workflows that genuinely require authentication or interaction (logging into portals, filling forms)."
+  - question: "How do I handle pages that block scraping?"
+    answer: "Reader handles anti bot bypass automatically through its stealth stack (browser fingerprint generation, identity randomization, proxy rotation). If a page still fails, the tool returns an error message and the agent can try a different URL or skip that source. For the hardest targets, use Reader's browser sessions instead of the scrape endpoint."
+---
+
+CrewAI is a framework for building multi agent systems where specialized agents collaborate on complex tasks. A researcher agent gathers information. An analyst agent processes it. A writer agent produces the output. Each agent has a role, a goal, and tools it can use.
+
+Agents without web access are limited to their training data. Agents with web access can check current prices, read documentation, monitor competitors, and gather live information. Reader provides that web access through tools that CrewAI agents can call during their reasoning: scrape pages to markdown, crawl sites for comprehensive research, and extract structured data from any URL.
+
+This guide shows how to build Reader tools for CrewAI, create web aware agents, and assemble crews for practical workflows.
+
+## Setup
+
+```bash
+pip install crewai reader-py
+```
+
+```python
+import os
+
+os.environ["READER_API_KEY"] = "rdr_your_api_key"
+os.environ["ANTHROPIC_API_KEY"] = "your_anthropic_key"
+```
+
+## Building Reader Tools for CrewAI
+
+CrewAI agents use tools to interact with external systems. Wrap Reader's capabilities as CrewAI tools.
+
+### Scrape Tool
+
+```python
+from crewai.tools import tool
+from reader_py import ReaderClient
+
+reader_client = ReaderClient(api_key=os.environ.get("READER_API_KEY"))
+
+@tool("Scrape Web Page")
+def scrape_page(url: str) -> str:
+    """Scrape a web page and return its content as clean markdown.
+    Use this to read any web page including JavaScript-rendered sites.
+    Input should be a valid URL starting with http:// or https://."""
+    try:
+        result = reader_client.read(url=url)
+        content = result.data.markdown
+        # Truncate for context window management
+        if len(content) > 15000:
+            content = content[:15000] + "\n\n[Content truncated for length]"
+        return content
+    except Exception as e:
+        return f"Failed to scrape {url}: {str(e)}"
+```
+
+### Extract Tool
+
+```python
+import json
+
+@tool("Extract Structured Data")
+def extract_data(url: str) -> str:
+    """Extract structured data from a web page. Returns JSON with
+    the key information found on the page including titles, prices,
+    descriptions, and other structured fields.
+    Input should be a valid URL."""
+    try:
+        result = reader_client.read(
+            url=url,
+            extract={
+                "prompt": "Extract the key structured data from this page "
+                          "including any names, prices, dates, descriptions, "
+                          "ratings, and other factual information."
+            }
+        )
+        if result.data.extracted:
+            return json.dumps(result.data.extracted, indent=2)
+        return result.data.markdown[:5000]
+    except Exception as e:
+        return f"Failed to extract from {url}: {str(e)}"
+```
+
+### Crawl Tool
+
+```python
+@tool("Crawl Website")
+def crawl_site(url: str) -> str:
+    """Crawl a website and return summaries of all discovered pages.
+    Use this to understand the full scope of a website's content.
+    Discovers up to 20 pages. Input should be the website's root URL."""
+    try:
+        result = reader_client.read(
+            url=url,
+            max_depth=2,
+            max_pages=20,
+        )
+        summaries = []
+        for page in result.data:
+            title = page.metadata.title if page.metadata else page.url
+            preview = page.markdown[:300] if page.markdown else ""
+            summaries.append(f"**{title}**\nURL: {page.url}\n{preview}...")
+
+        return "\n\n---\n\n".join(summaries)
+    except Exception as e:
+        return f"Failed to crawl {url}: {str(e)}"
+```
+
+### Tool Descriptions Matter
+
+CrewAI agents decide which tool to use based on the tool's description. Write clear, specific descriptions that tell the agent when to use each tool:
+
+- **Scrape:** "read any web page" signals single page reading
+- **Extract:** "structured data" and "JSON" signal when the agent needs typed fields
+- **Crawl:** "full scope" and "all discovered pages" signal comprehensive research
+
+Vague descriptions cause agents to pick the wrong tool. Specific descriptions lead to better tool selection.
+
+## Creating Web Aware Agents
+
+CrewAI agents have a role, goal, backstory, and tools. The role and backstory guide the agent's behavior. The tools define what it can do.
+
+### Researcher Agent
+
+```python
+from crewai import Agent
+
+researcher = Agent(
+    role="Web Researcher",
+    goal="Find accurate, current information from the web to support analysis",
+    backstory=(
+        "You are a thorough web researcher who uses scraping tools to "
+        "gather information from websites. You verify facts by checking "
+        "multiple sources. You focus on extracting the most relevant "
+        "information and presenting it clearly."
+    ),
+    tools=[scrape_page, extract_data, crawl_site],
+    verbose=True,
+)
+```
+
+### Analyst Agent
+
+```python
+analyst = Agent(
+    role="Data Analyst",
+    goal="Analyze gathered information and identify patterns, trends, and insights",
+    backstory=(
+        "You are a sharp analyst who turns raw information into actionable "
+        "insights. You compare data points, identify trends, and highlight "
+        "what matters most. You support claims with specific data."
+    ),
+    tools=[],  # Analyst reasons about data, doesn't need web tools
+    verbose=True,
+)
+```
+
+### Writer Agent
+
+```python
+writer = Agent(
+    role="Report Writer",
+    goal="Produce clear, well-structured reports from research and analysis",
+    backstory=(
+        "You are a skilled writer who turns complex analysis into readable "
+        "reports. You organize information logically, use clear language, "
+        "and highlight the most important findings upfront."
+    ),
+    tools=[],
+    verbose=True,
+)
+```
+
+Not every agent needs web tools. The researcher gathers data from the web. The analyst and writer work with the data the researcher provides. Giving every agent scraping tools wastes credits and creates redundant web requests.
+
+## Building Crews for Practical Workflows
+
+### Competitor Analysis Crew
+
+A crew that researches competitors, analyzes their positioning, and produces a report.
+
+```python
+from crewai import Crew, Task
+
+# Task 1: Research competitor websites
+research_task = Task(
+    description=(
+        "Research these competitor websites and gather information about "
+        "their pricing, features, positioning, and target audience:\n"
+        "1. https://competitor-a.com\n"
+        "2. https://competitor-b.com\n"
+        "3. https://competitor-c.com\n\n"
+        "For each competitor, scrape their homepage and pricing page. "
+        "Extract pricing data (plan names, prices, features) as structured data. "
+        "Note their positioning (tagline, value proposition, target audience)."
+    ),
+    expected_output=(
+        "A detailed summary of each competitor's pricing, features, "
+        "and positioning with specific data points."
+    ),
+    agent=researcher,
+)
+
+# Task 2: Analyze the competitive landscape
+analysis_task = Task(
+    description=(
+        "Analyze the competitor research and identify:\n"
+        "- How competitors price relative to each other\n"
+        "- Feature gaps and overlaps\n"
+        "- Positioning differences (who targets developers vs enterprises)\n"
+        "- Opportunities for differentiation"
+    ),
+    expected_output=(
+        "A competitive analysis with specific comparisons, identified "
+        "gaps, and strategic recommendations."
+    ),
+    agent=analyst,
+    context=[research_task],  # Receives output from research
+)
+
+# Task 3: Write the report
+report_task = Task(
+    description=(
+        "Write a competitive intelligence report based on the research "
+        "and analysis. Include an executive summary, competitor profiles, "
+        "comparison table, and recommendations."
+    ),
+    expected_output="A well-structured competitive intelligence report.",
+    agent=writer,
+    context=[research_task, analysis_task],
+)
+
+# Assemble and run
+crew = Crew(
+    agents=[researcher, analyst, writer],
+    tasks=[research_task, analysis_task, report_task],
+    verbose=True,
+)
+
+result = crew.kickoff()
+print(result)
+```
+
+The researcher scrapes competitor sites (6 pages: 3 homepages + 3 pricing pages). The analyst receives the research and identifies patterns. The writer produces the report. Each agent specializes in its role.
+
+### Content Gap Analysis Crew
+
+A crew that compares your content with a competitor's to find topics they cover that you do not.
+
+```python
+content_research = Task(
+    description=(
+        "Crawl both websites to discover their content:\n"
+        "1. Our blog: https://reader.dev/blog (crawl, max 30 pages)\n"
+        "2. Competitor blog: https://competitor.com/blog (crawl, max 30 pages)\n\n"
+        "List every blog post title and URL from both sites."
+    ),
+    expected_output="Complete list of blog posts from both sites with titles and URLs.",
+    agent=researcher,
+)
+
+gap_analysis = Task(
+    description=(
+        "Compare the two blog content lists. Identify:\n"
+        "- Topics the competitor covers that we don't\n"
+        "- Topics we cover that they don't\n"
+        "- Topics both cover (potential for better content)\n"
+        "- Keyword opportunities based on their topic choices"
+    ),
+    expected_output="Content gap analysis with specific topic recommendations.",
+    agent=analyst,
+    context=[content_research],
+)
+
+crew = Crew(
+    agents=[researcher, analyst],
+    tasks=[content_research, gap_analysis],
+    verbose=True,
+)
+```
+
+The researcher crawls both blogs using the crawl tool (2 crawls, up to 60 pages total). The analyst compares the discovered content and identifies gaps.
+
+### Lead Research Crew
+
+A crew that researches prospective companies before sales outreach.
+
+```python
+lead_researcher = Agent(
+    role="Lead Researcher",
+    goal="Gather comprehensive information about prospect companies",
+    backstory=(
+        "You research companies to prepare the sales team for outreach. "
+        "You find what the company does, their size, technology stack, "
+        "recent news, and key decision makers."
+    ),
+    tools=[scrape_page, extract_data],
+    verbose=True,
+)
+
+outreach_writer = Agent(
+    role="Outreach Specialist",
+    goal="Write personalized outreach messages based on research",
+    backstory=(
+        "You write personalized sales emails that reference specific "
+        "details about the prospect's company, demonstrating genuine "
+        "understanding of their business and needs."
+    ),
+    tools=[],
+    verbose=True,
+)
+
+research_task = Task(
+    description=(
+        "Research this prospect company: https://prospect-company.com\n\n"
+        "Scrape their homepage, about page, and careers page. "
+        "Extract: what they do, company size, technology stack, "
+        "recent hires, and any pain points visible from their site."
+    ),
+    expected_output="Detailed company profile with actionable insights for sales.",
+    agent=lead_researcher,
+)
+
+outreach_task = Task(
+    description=(
+        "Write a personalized outreach email based on the company research. "
+        "Reference specific details about the company. Explain how our "
+        "product solves a problem visible from their website or hiring patterns."
+    ),
+    expected_output="A personalized sales email ready to send.",
+    agent=outreach_writer,
+    context=[research_task],
+)
+
+crew = Crew(
+    agents=[lead_researcher, outreach_writer],
+    tasks=[research_task, outreach_task],
+    verbose=True,
+)
+```
+
+## Managing Token Usage
+
+Web content is large. A single scraped page can be 5,000 to 15,000 tokens. CrewAI agents pass context between tasks, and accumulated web content can exceed context window limits.
+
+### Truncation
+
+The scrape tool already truncates at 15,000 characters. Adjust this limit based on your model's context window and the number of pages the crew scrapes per run.
+
+### Use Extract Instead of Scrape
+
+When agents need specific data points rather than full page content, use the extract tool. Extracted JSON is 50 to 200 tokens vs 3,000 to 10,000 tokens for full markdown.
+
+```python
+# Instead of scraping the full pricing page (5,000+ tokens)
+# Extract just the pricing data (200 tokens)
+extract_task = Task(
+    description=(
+        "Extract pricing data from https://competitor.com/pricing. "
+        "Use the Extract tool to get plan names, prices, and features "
+        "as structured JSON."
+    ),
+    agent=researcher,
+)
+```
+
+### Limit Crawl Scope
+
+Keep `max_pages` low (10 to 30) for crawl tasks. The crawl tool returns summaries (first 300 characters per page), not full content, which helps manage context size. If the agent needs full content from specific pages discovered during crawl, it can scrape those individually.
+
+## Error Handling
+
+Web scraping fails. Pages block requests, URLs change, sites go down. The tool implementations above include try/except blocks that return error messages instead of crashing the agent. The agent sees the error message and can decide to try a different URL, skip the source, or report the failure.
+
+For production crews, add retry logic inside the tools:
+
+```python
+import time
+
+@tool("Scrape Web Page")
+def scrape_page_with_retry(url: str) -> str:
+    """Scrape a web page with automatic retry on failure."""
+    for attempt in range(3):
+        try:
+            result = reader_client.read(url=url)
+            content = result.data.markdown
+            if len(content) > 15000:
+                content = content[:15000] + "\n\n[Truncated]"
+            return content
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+                continue
+            return f"Failed after 3 attempts: {str(e)}"
+```
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## Conclusion
+
+CrewAI's multi agent architecture maps naturally to web research workflows. The researcher gathers data from the web using Reader tools. The analyst processes and compares the data. The writer produces the output. Each agent specializes, and context flows between tasks automatically.
+
+Reader provides three tools that cover the full range of web access: scrape for reading specific pages, extract for pulling structured data, and crawl for comprehensive site research. The clean markdown output fits naturally into CrewAI's context passing because it is token efficient and LLM readable without preprocessing.
+
+Start with a two agent crew (researcher + analyst) and one or two tools (scrape + extract). Add complexity as the workflow proves value. Most practical CrewAI workflows need fewer agents and tools than you initially expect.

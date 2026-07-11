@@ -1,0 +1,338 @@
+---
+title: "Playwright vs Puppeteer for Web Scraping (2026)"
+description: "A detailed comparison of Playwright and Puppeteer for web scraping. Covers auto-wait, multi-browser support, stealth, performance, and when to use each."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Deep Dives"
+keywords: ["playwright vs puppeteer", "playwright scraping", "puppeteer scraping", "browser automation comparison"]
+schemaType: "article"
+faq:
+  - question: "Is Playwright faster than Puppeteer?"
+    answer: "Performance is similar because both run the same Chromium browser. Playwright's auto wait can be slightly slower on well optimized Puppeteer scripts (where explicit waits are precise), but slightly faster on poorly optimized scripts (where Puppeteer waits are too generous). The difference is negligible for most scraping workloads."
+  - question: "Can I migrate from Puppeteer to Playwright?"
+    answer: "Yes. The APIs are similar enough that migration is straightforward. The main changes: replace page.waitForSelector with locators (or remove them entirely since Playwright auto waits), replace page.$eval with locator.evaluate, and replace page.$$eval with locator.evaluateAll. Playwright provides a migration guide in their documentation."
+  - question: "Which has better anti bot bypass?"
+    answer: "Puppeteer has the more mature stealth ecosystem through puppeteer-extra-stealth. Playwright's stealth patches are less comprehensive. Neither fully solves anti bot detection on aggressively protected sites. For serious stealth, use a managed service like Reader that handles TLS fingerprinting, browser fingerprinting, and proxy rotation at the engine level."
+  - question: "Do I need Playwright AND Puppeteer?"
+    answer: "No. Choose one. They solve the same problem. Most teams standardize on Playwright for new projects and maintain existing Puppeteer scripts until natural migration points arise."
+---
+
+Playwright and Puppeteer are the two dominant browser automation libraries for web scraping. Both launch real Chromium browsers, render JavaScript, execute dynamic content, and give you access to the fully rendered DOM. They solve the same core problem: scraping the roughly 80 percent of the modern web that renders content through JavaScript.
+
+But the developer experience, architecture, and ecosystem differ in ways that matter for scraping. This comparison covers auto wait vs explicit waits, multi browser vs Chromium only, language support, stealth capabilities, performance, and how each connects to Reader's managed browser sessions.
+
+## Background
+
+**Puppeteer** is Google's Node.js library for controlling Chrome through the Chrome DevTools Protocol (CDP). Released in 2017, it has roughly 94,000 GitHub stars and about 10.7 million weekly npm downloads. It was the first popular high level CDP library and established many of the patterns that browser automation tools still use.
+
+**Playwright** is Microsoft's browser automation library, released in 2020. Several of its core engineers previously worked on Puppeteer at Google. Playwright has roughly 70,000+ GitHub stars and about 57.6 million weekly npm downloads, making it approximately 5 times more downloaded than Puppeteer despite being 3 years younger. Playwright supports Chromium, Firefox, and WebKit with full API parity, and is available in JavaScript/TypeScript, Python, Java, and .NET.
+
+## Auto Wait vs Explicit Waits
+
+This is the single most impactful difference for scraping.
+
+### Puppeteer: Explicit Waits
+
+Puppeteer requires you to explicitly wait for elements before interacting with them. If you try to select an element before it appears in the DOM, you get null or an error.
+
+```javascript
+const puppeteer = require('puppeteer');
+
+const browser = await puppeteer.launch({ headless: true });
+const page = await browser.newPage();
+await page.goto('https://example.com/products');
+
+// Must wait explicitly before selecting
+await page.waitForSelector('.product-card', { timeout: 10000 });
+
+// Must wait for navigation after clicking
+await Promise.all([
+    page.waitForNavigation(),
+    page.click('a.next-page'),
+]);
+
+// Must wait after navigation before selecting again
+await page.waitForSelector('.product-card');
+const products = await page.$$eval('.product-card', cards =>
+    cards.map(c => c.textContent)
+);
+```
+
+Missing a `waitForSelector` or `waitForNavigation` is the most common source of bugs in Puppeteer scripts. The scraper returns empty arrays or null values intermittently because sometimes the page loads fast enough and sometimes it does not. These timing bugs are difficult to reproduce and debug.
+
+### Playwright: Auto Wait
+
+Playwright automatically waits for elements to be attached to the DOM, visible, stable (not animating), and enabled before interacting with them. You write the action you want, and Playwright handles the timing.
+
+```javascript
+const { chromium } = require('playwright');
+
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage();
+await page.goto('https://example.com/products');
+
+// Playwright auto-waits for elements to be ready
+const products = await page.locator('.product-card').allTextContents();
+
+// Click auto-waits for the element, then auto-waits for navigation
+await page.locator('a.next-page').click();
+
+// Locator auto-waits again on the new page
+const nextProducts = await page.locator('.product-card').allTextContents();
+```
+
+No `waitForSelector`. No `waitForNavigation`. No `Promise.all` wrapping clicks and waits. The code is shorter, more readable, and eliminates the entire class of timing bugs that Puppeteer scrapers suffer from.
+
+### Impact on Scraping
+
+For scraping, auto wait eliminates the most common failure mode. When a page loads slowly, when content renders in multiple stages, or when the DOM updates after JavaScript execution, Playwright waits automatically. Puppeteer requires you to anticipate every scenario and add explicit waits.
+
+In production scrapers that run across hundreds of different pages with varying load times, network conditions, and rendering behavior, auto wait is a significant reliability advantage.
+
+## Locator API vs Raw Selectors
+
+### Puppeteer: Direct Selectors
+
+Puppeteer uses `page.$()` (find one element) and `page.$$()` (find all elements) with CSS selectors. To extract data, you typically use `page.$eval()` or `page.$$eval()` which run a function in the browser context.
+
+```javascript
+// Single element
+const title = await page.$eval('h1', el => el.textContent);
+
+// Multiple elements
+const prices = await page.$$eval('.price', els =>
+    els.map(el => el.textContent.trim())
+);
+
+// Check if element exists (returns null if not found)
+const nextButton = await page.$('a.next-page');
+if (nextButton) {
+    await nextButton.click();
+}
+```
+
+These selectors are evaluated once at call time. If the page updates between the selector and the action, you get a stale element reference.
+
+### Playwright: Locators
+
+Playwright's locator API is lazy and auto retrying. A locator does not query the DOM until you perform an action. If the first attempt fails, it retries until the timeout.
+
+```javascript
+// Locators are lazy - no DOM query until you act
+const productCards = page.locator('.product-card');
+const count = await productCards.count();
+
+// Chaining
+const firstProductPrice = page.locator('.product-card')
+    .first()
+    .locator('.price');
+const price = await firstProductPrice.textContent();
+
+// Filtering
+const expensiveProducts = page.locator('.product-card')
+    .filter({ has: page.locator('.price', { hasText: /\$[5-9]\d/ }) });
+
+// Text-based selection (no CSS selector needed)
+await page.getByRole('button', { name: 'Add to cart' }).click();
+await page.getByText('Next page').click();
+```
+
+Locators retry automatically when the DOM changes. If a React component re renders between the locator creation and the action, the locator re queries the DOM and finds the updated element. This resilience eliminates stale element errors that plague Puppeteer scripts on dynamic pages.
+
+## Multi Browser Support
+
+### Puppeteer: Chromium (+ Experimental Firefox)
+
+Puppeteer primarily targets Chromium. It has experimental Firefox support (via WebDriver BiDi) but does not support WebKit (Safari). For scraping, Chromium covers the vast majority of use cases because you are targeting Chrome compatible rendering.
+
+### Playwright: Chromium, Firefox, WebKit
+
+Playwright supports all three browser engines with full API parity. The same script runs on Chromium, Firefox, and WebKit without modification.
+
+```javascript
+const { chromium, firefox, webkit } = require('playwright');
+
+for (const browserType of [chromium, firefox, webkit]) {
+    const browser = await browserType.launch();
+    const page = await browser.newPage();
+    await page.goto('https://example.com');
+    console.log(`${browserType.name()}: ${await page.title()}`);
+    await browser.close();
+}
+```
+
+For scraping, multi browser support matters in two scenarios. First, some anti bot systems serve different challenges based on the browser engine. If Chromium gets blocked, Firefox or WebKit might succeed. Second, some sites render differently across engines. Testing with multiple browsers catches rendering specific issues.
+
+## Language Support
+
+**Puppeteer:** JavaScript/TypeScript (Node.js) only.
+
+**Playwright:** JavaScript/TypeScript, Python, Java, and .NET with full feature parity.
+
+```python
+# Playwright Python - identical API to the JS version
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+    page.goto("https://example.com")
+    title = page.title()
+    print(title)
+    browser.close()
+```
+
+For Python scraping teams, Playwright is the clear choice because Puppeteer has no Python bindings. Pyppeteer (a community Python port of Puppeteer) exists but is less maintained and lacks feature parity with the official Puppeteer.
+
+## Stealth and Anti Bot Detection
+
+Both Playwright and Puppeteer are detectable by [anti bot systems](/blog/anti-bot-detection) in their default configurations. The key detection vectors:
+
+**navigator.webdriver.** Both set this to true by default in headless mode. Anti bot systems check this property as the simplest automation signal.
+
+**Headless detection.** Despite improvements in "new headless" mode (Chrome 112+), differences in canvas rendering, WebGL, font enumeration, and plugin lists between headless and headed modes are detectable.
+
+**Automation controlled flag.** Chrome exposes automation signals through the `--enable-automation` flag and CDP detection. Both libraries add automation related entries that detection scripts check.
+
+### Puppeteer Stealth Ecosystem
+
+Puppeteer has the stronger stealth ecosystem through **puppeteer-extra** and **puppeteer-extra-stealth**. The stealth plugin patches navigator.webdriver, chrome.runtime, plugins, languages, WebGL vendor, and other signals. It is the most widely used open source stealth solution.
+
+```javascript
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
+
+const browser = await puppeteer.launch({ headless: true });
+// Stealth patches applied to every page automatically
+```
+
+The stealth plugin has been effective for years but is degrading as anti bot systems learn to detect the specific patches it applies.
+
+### Playwright Stealth
+
+Playwright does not have an equivalent first party stealth plugin. Community stealth patches exist but are less mature. The typical approach is manual:
+
+```javascript
+const browser = await chromium.launch({
+    headless: true,
+    args: ['--disable-blink-features=AutomationControlled'],
+});
+const context = await browser.newContext();
+context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+    });
+});
+```
+
+These manual patches cover the basics but are less comprehensive than puppeteer-extra-stealth.
+
+### Neither Fully Solves Stealth
+
+Both Playwright and Puppeteer provide the browser infrastructure. Neither fully solves [anti bot detection](/blog/anti-bot-detection). For serious stealth, you need either a specialized tool (Camoufox, or Playwright with fingerprint-generator) or a managed service that handles stealth at the engine level rather than through JavaScript patches.
+
+## Performance and Resource Usage
+
+Both libraries launch Chromium, so the base resource usage is similar: 50 to 200MB per browser instance, 2 to 5 seconds to launch, and significant CPU usage during page rendering.
+
+### Startup Time
+
+Playwright's browser management is slightly more efficient. It downloads and manages browser binaries through `playwright install` and can share browser instances across tests/scrapes more cleanly.
+
+Puppeteer downloads Chromium during `npm install` and ties the binary to the package version. Switching browser versions requires reinstalling the package.
+
+### Connection Overhead
+
+Both connect to the browser via CDP WebSocket. The protocol overhead is similar. Playwright's auto wait adds minimal overhead (it polls the DOM, not the network). Puppeteer's explicit waits have no overhead when properly configured but add latency when configured with generous timeouts.
+
+### Memory at Scale
+
+For scraping thousands of pages, memory management matters. Both libraries support page reuse (navigate to new URLs in the same page) and browser context isolation. Playwright's browser context model is slightly more flexible for isolating sessions without launching new browser processes.
+
+## Developer Tooling
+
+### Playwright
+
+**Codegen.** Record browser interactions and generate scripts: `npx playwright codegen https://example.com`. This opens a browser where you click, type, and navigate. Playwright generates the corresponding code. For scraping, this is the fastest way to prototype selectors for a new site.
+
+**Tracing.** Record execution traces that capture screenshots, DOM snapshots, network activity, and console logs at every step. Open traces in the Trace Viewer for step by step debugging.
+
+**Test runner.** Built in test runner with parallel execution, auto retries, and HTML reports. More useful for testing than scraping but the infrastructure is shared.
+
+### Puppeteer
+
+**DevTools Protocol access.** Puppeteer provides lower level CDP access through `page.target().createCDPSession()`. This gives direct access to CDP domains (Network, Performance, DOM, Debugger) for advanced instrumentation.
+
+**Simpler API surface.** Puppeteer's API is smaller and more focused. Less to learn, fewer abstractions between you and the browser.
+
+## Connecting to Reader's Browser Sessions
+
+Both Playwright and Puppeteer connect to Reader's managed browser sessions through standard CDP. The connection is one line in either library.
+
+### Playwright
+
+```javascript
+const { chromium } = require('playwright');
+const session = await reader.sessions.create();
+
+const browser = await chromium.connectOverCDP(session.wsEndpoint);
+const page = (await browser.contexts())[0].pages()[0];
+await page.goto('https://protected-site.com');
+```
+
+### Puppeteer
+
+```javascript
+const puppeteer = require('puppeteer');
+const session = await reader.sessions.create();
+
+const browser = await puppeteer.connect({
+    browserWSEndpoint: session.wsEndpoint,
+});
+const [page] = await browser.pages();
+await page.goto('https://protected-site.com');
+```
+
+Reader's browser sessions include stealth (browser fingerprint generation, identity randomization, canvas/WebGL randomization) and proxy rotation built in. Whether you connect with Playwright or Puppeteer, you get the same stealth layer. The choice between the two is purely about developer preference and API ergonomics.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## When to Use Each
+
+### Choose Playwright if:
+
+You are starting a new scraping project. Auto wait eliminates the most common class of bugs. The locator API is more resilient to DOM changes. Multi browser support gives you fallback options. Multi language support means your Python, Java, or .NET team can use it directly. Codegen accelerates prototyping.
+
+### Choose Puppeteer if:
+
+You have an existing Puppeteer codebase that works. Migration to Playwright is straightforward but not free. The puppeteer-extra-stealth ecosystem is important to your workflow. You prefer a smaller, more focused API. You need low level CDP access for advanced instrumentation.
+
+### Choose Reader's Browser Sessions if:
+
+You want stealth handled at the engine level rather than through JavaScript patches. You want proxy rotation, health checking, and session management handled automatically. You want browser sessions alongside scraping and crawling under one API. Both Playwright and Puppeteer connect to Reader sessions identically.
+
+## Comparison Table
+
+| Feature | Playwright | Puppeteer |
+|---------|-----------|-----------|
+| Auto wait | Yes | No (explicit) |
+| Locator API | Yes (lazy, retrying) | No (direct selectors) |
+| Browsers | Chromium, Firefox, WebKit | Chromium (Firefox experimental) |
+| Languages | JS, Python, Java, .NET | JS/TS only |
+| npm weekly downloads | ~57.6M | ~10.7M |
+| GitHub stars | ~70K+ | ~94K |
+| Codegen | Yes | No |
+| Tracing | Yes | Limited |
+| Stealth plugins | Community (less mature) | puppeteer-extra-stealth (mature) |
+| CDP access | Via API | Direct, lower level |
+| Reader CDP connect | connectOverCDP | connect(\{ browserWSEndpoint \}) |
+| License | Apache 2.0 | Apache 2.0 |
+
+## Conclusion
+
+For new scraping projects, Playwright is the better default choice. Auto wait eliminates timing bugs, the locator API is more resilient, multi browser gives you fallback options, multi language means any team can use it, and codegen accelerates development. The 5x download advantage reflects real industry adoption.
+
+Puppeteer remains a strong tool with the largest community, the best stealth plugin ecosystem, and a simpler API. If you already have working Puppeteer scrapers, there is no urgent reason to migrate.
+
+Both are free, open source (Apache 2.0), and connect to Reader's managed browser sessions identically. The stealth, proxy, and infrastructure layers are the same regardless of which library you use to drive the browser.

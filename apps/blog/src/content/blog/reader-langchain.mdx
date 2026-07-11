@@ -1,0 +1,492 @@
+---
+title: "Using Reader with LangChain: A Document Loader Guide"
+description: "Learn how to integrate Reader with LangChain for web scraping, crawling, and RAG pipelines. Build document loaders, tools, and agents with live web data."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Ecosystem"
+keywords: ["reader langchain", "langchain web scraping", "langchain document loader", "langchain rag web data"]
+schemaType: "article"
+faq:
+  - question: "Does Reader have an official LangChain integration?"
+    answer: "Reader integrates with LangChain through its Python SDK. The document loader and tool examples in this guide are the recommended integration patterns. Reader's REST API also works with LangChain's generic HTTP tools for any custom integration."
+  - question: "Can I use Reader with LangChain's existing web loaders?"
+    answer: "Yes, but Reader replaces them rather than supplementing them. LangChain's WebBaseLoader and AsyncHtmlLoader use requests and BeautifulSoup, which cannot render JavaScript or handle anti bot protection. Reader handles both and returns cleaner markdown output."
+  - question: "How do I handle rate limiting with LangChain agents?"
+    answer: "Add a delay between tool calls in the agent executor. Reader's API handles rate limiting on its side, but adding a 1 to 2 second delay between scrape calls prevents overwhelming any single target site. For batch operations, use Reader's batch endpoint (up to 1,000 URLs in parallel) rather than sequential tool calls."
+  - question: "What embedding model should I use?"
+    answer: "Voyage 3 (recommended by Anthropic) for code and technical documentation. OpenAI text-embedding-3-small for a good balance of cost and quality. The chunking strategy matters more than the embedding model: well chunked markdown with contextual metadata outperforms poorly chunked content with any model."
+---
+
+LangChain is the most widely used framework for building LLM applications. Reader provides the web data infrastructure. Together they give your LangChain agents and RAG pipelines live web access: scrape pages to markdown, crawl entire sites for knowledge bases, extract structured data, and drive browser sessions for authenticated workflows.
+
+This guide shows how to integrate Reader with LangChain's document loaders, tools, and retrieval chains. Every example uses Reader's Python SDK alongside LangChain's standard interfaces.
+
+## Setup
+
+Install both libraries:
+
+```bash
+pip install reader-py langchain langchain-anthropic langchain-community
+pip install chromadb  # For vector storage examples
+```
+
+Set your API keys:
+
+```python
+import os
+
+os.environ["READER_API_KEY"] = "rdr_your_api_key"
+os.environ["ANTHROPIC_API_KEY"] = "your_anthropic_key"
+```
+
+## Building a Reader Document Loader
+
+LangChain's document loaders convert data sources into `Document` objects with `page_content` and `metadata`. Building a Reader document loader integrates web scraping into LangChain's standard pipeline.
+
+### Single Page Loader
+
+```python
+from langchain.schema import Document
+from reader_py import ReaderClient
+
+class ReaderLoader:
+    """LangChain document loader using Reader for web scraping."""
+
+    def __init__(self, api_key=None):
+        self.client = ReaderClient(
+            api_key=api_key or os.environ.get("READER_API_KEY")
+        )
+
+    def load_url(self, url):
+        """Load a single URL as a LangChain Document."""
+        result = self.client.read(url=url)
+
+        return Document(
+            page_content=result.data.markdown,
+            metadata={
+                "source": url,
+                "title": result.data.metadata.title if result.data.metadata else "",
+            },
+        )
+
+    def load_urls(self, urls):
+        """Load multiple URLs as LangChain Documents."""
+        result = self.client.read(urls=urls)
+
+        documents = []
+        for page in result.data:
+            documents.append(Document(
+                page_content=page.markdown,
+                metadata={
+                    "source": page.url,
+                    "title": page.metadata.title if page.metadata else "",
+                },
+            ))
+
+        return documents
+
+# Usage
+loader = ReaderLoader()
+doc = loader.load_url("https://docs.example.com/getting-started")
+print(f"Loaded: {doc.metadata['title']}")
+print(f"Content: {len(doc.page_content)} chars")
+```
+
+Reader returns clean markdown by default, which is exactly what LangChain expects as `page_content`. No HTML cleaning step is needed. The markdown preserves headings, lists, code blocks, and tables that LangChain's text splitters understand.
+
+### Crawl Loader
+
+Load an entire site by crawling:
+
+```python
+class ReaderCrawlLoader:
+    """Load an entire site as LangChain Documents via Reader crawl."""
+
+    def __init__(self, api_key=None):
+        self.client = ReaderClient(
+            api_key=api_key or os.environ.get("READER_API_KEY")
+        )
+
+    def load(self, url, max_depth=3, max_pages=100):
+        """Crawl a site and return Documents for every page."""
+        result = self.client.read(
+            url=url,
+            max_depth=max_depth,
+            max_pages=max_pages,
+        )
+
+        documents = []
+        for page in result.data:
+            if len(page.markdown) < 100:
+                continue  # Skip near-empty pages
+
+            documents.append(Document(
+                page_content=page.markdown,
+                metadata={
+                    "source": page.url,
+                    "title": page.metadata.title if page.metadata else "",
+                },
+            ))
+
+        return documents
+
+# Crawl a documentation site
+crawler = ReaderCrawlLoader()
+docs = crawler.load("https://docs.example.com", max_depth=2, max_pages=50)
+print(f"Loaded {len(docs)} documents from crawl")
+```
+
+This replaces LangChain's built in web loaders (WebBaseLoader, AsyncHtmlLoader) with Reader's managed infrastructure. The advantages: JavaScript rendering handles React/Vue/Angular sites that static loaders miss, [anti bot bypass](/blog/anti-bot-detection) handles protected sites, and markdown output is cleaner than what HTML parsers produce.
+
+## Building a RAG Pipeline with Web Data
+
+The most common LangChain + Reader workflow: crawl a site, index the content, and answer questions from it.
+
+### Step 1: Crawl and Split
+
+```python
+from langchain.text_splitter import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+
+# Crawl the site
+crawler = ReaderCrawlLoader()
+docs = crawler.load("https://docs.example.com", max_depth=3, max_pages=200)
+print(f"Crawled {len(docs)} pages")
+
+# Split by markdown headers first
+headers_to_split = [
+    ("#", "heading_1"),
+    ("##", "heading_2"),
+    ("###", "heading_3"),
+]
+header_splitter = MarkdownHeaderTextSplitter(headers_to_split)
+
+# Then split large sections by character count
+char_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1500,
+    chunk_overlap=200,
+    separators=["\n\n", "\n", ". ", " "],
+)
+
+all_chunks = []
+for doc in docs:
+    # First pass: split on headers
+    header_chunks = header_splitter.split_text(doc.page_content)
+
+    for chunk in header_chunks:
+        # Preserve source metadata
+        chunk.metadata["source"] = doc.metadata["source"]
+        chunk.metadata["title"] = doc.metadata["title"]
+
+    # Second pass: split large header sections
+    final_chunks = char_splitter.split_documents(header_chunks)
+    all_chunks.extend(final_chunks)
+
+print(f"Created {len(all_chunks)} chunks")
+```
+
+LangChain's `MarkdownHeaderTextSplitter` understands markdown structure because Reader's output uses standard markdown headings. This two pass splitting (headers first, then size) produces chunks that are both semantically coherent and within embedding model limits.
+
+### Step 2: Embed and Store
+
+```python
+from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings import VoyageEmbeddings
+
+# Create embeddings
+embeddings = VoyageEmbeddings(
+    model="voyage-3",
+    voyage_api_key=os.environ.get("VOYAGE_API_KEY"),
+)
+
+# Store in ChromaDB
+vectorstore = Chroma.from_documents(
+    documents=all_chunks,
+    embedding=embeddings,
+    collection_name="documentation",
+    persist_directory="./chroma_db",
+)
+
+print(f"Indexed {len(all_chunks)} chunks in ChromaDB")
+```
+
+### Step 3: Build the Retrieval Chain
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain.chains import RetrievalQA
+
+# LLM for generation
+llm = ChatAnthropic(model="claude-sonnet-4-6", temperature=0)
+
+# Retriever
+retriever = vectorstore.as_retriever(
+    search_type="similarity",
+    search_kwargs={"k": 5},
+)
+
+# RAG chain
+qa_chain = RetrievalQA.from_chain_type(
+    llm=llm,
+    chain_type="stuff",
+    retriever=retriever,
+    return_source_documents=True,
+)
+
+# Ask questions
+result = qa_chain.invoke({"query": "How do I authenticate with the API?"})
+print(f"Answer: {result['result']}")
+print(f"\nSources:")
+for doc in result["source_documents"]:
+    print(f"  - {doc.metadata.get('source', 'Unknown')}")
+```
+
+This is a complete, working RAG pipeline. Reader crawls the docs. LangChain splits and embeds the markdown. Claude answers questions with citations to source pages.
+
+## Using Reader as a LangChain Tool
+
+For agents that need to scrape pages during their reasoning loop (rather than from a pre built index), wrap Reader as a LangChain tool.
+
+### Scrape Tool
+
+```python
+from langchain.tools import tool
+
+@tool
+def scrape_webpage(url: str) -> str:
+    """Scrape a web page and return its content as clean markdown.
+    Use this when you need to read a specific web page to answer
+    a question or gather information."""
+    client = ReaderClient(api_key=os.environ.get("READER_API_KEY"))
+    result = client.read(url=url)
+    # Truncate to fit in context
+    content = result.data.markdown
+    if len(content) > 10000:
+        content = content[:10000] + "\n\n[Content truncated]"
+    return content
+```
+
+### Extract Tool
+
+```python
+@tool
+def extract_data(url: str, fields: str) -> str:
+    """Extract structured data from a web page. Provide the URL and
+    a comma-separated list of fields to extract (e.g., 'title,price,rating').
+    Returns JSON with the extracted fields."""
+    import json
+
+    client = ReaderClient(api_key=os.environ.get("READER_API_KEY"))
+
+    # Build schema from field list
+    schema = {field.strip(): "string" for field in fields.split(",")}
+
+    result = client.read(url=url, extract={"schema": schema})
+
+    if result.data.extracted:
+        return json.dumps(result.data.extracted, indent=2)
+    return "Could not extract data from this page."
+```
+
+### Crawl Tool
+
+```python
+@tool
+def crawl_site(url: str, max_pages: int = 20) -> str:
+    """Crawl a website and return a summary of all discovered pages.
+    Use this to understand the structure and content of a website."""
+    client = ReaderClient(api_key=os.environ.get("READER_API_KEY"))
+
+    result = client.read(url=url, max_depth=2, max_pages=min(max_pages, 50))
+
+    summaries = []
+    for page in result.data:
+        preview = page.markdown[:200] if page.markdown else ""
+        title = page.metadata.title if page.metadata else page.url
+        summaries.append(f"**{title}** ({page.url})\n{preview}...")
+
+    return "\n\n".join(summaries)
+```
+
+### Using Tools with an Agent
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_core.prompts import ChatPromptTemplate
+
+llm = ChatAnthropic(model="claude-sonnet-4-6", temperature=0)
+
+tools = [scrape_webpage, extract_data, crawl_site]
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful research assistant with web access. "
+               "Use the scrape, extract, and crawl tools to gather "
+               "information from the web when needed."),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),
+])
+
+agent = create_tool_calling_agent(llm, tools, prompt)
+executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+
+# The agent decides when to use web scraping
+result = executor.invoke({
+    "input": "What are the current pricing plans for Stripe? "
+             "Compare their starter and growth tiers."
+})
+print(result["output"])
+```
+
+The agent reads the question, decides it needs live web data, calls `scrape_webpage` with Stripe's pricing URL, reads the markdown, and answers with current information. No pre built index needed. The agent scrapes on demand.
+
+## Conversational RAG with Live Updates
+
+Combine a pre built index with live scraping. The agent checks the index first and falls back to live scraping when the index does not have the answer.
+
+```python
+from langchain.tools import tool
+
+@tool
+def search_docs(query: str) -> str:
+    """Search the documentation index for information.
+    Use this first before scraping the web."""
+    results = retriever.invoke(query)
+    if results:
+        return "\n\n".join([
+            f"Source: {doc.metadata.get('source', 'Unknown')}\n{doc.page_content}"
+            for doc in results[:3]
+        ])
+    return "No relevant documentation found."
+
+# Agent with both index search and live scraping
+tools = [search_docs, scrape_webpage, extract_data]
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a documentation assistant. "
+               "Search the docs index first. If the answer isn't there, "
+               "scrape the live page for current information."),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),
+])
+
+agent = create_tool_calling_agent(llm, tools, prompt)
+executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+```
+
+This pattern handles two failure modes: questions about content in the index (answered from the vector store, fast and cheap) and questions about content not yet indexed or recently updated (answered from live scraping, slower but current).
+
+## Keeping the Index Fresh
+
+Schedule periodic re crawls to keep the RAG index current:
+
+```python
+import schedule
+import time
+
+def refresh_documentation_index():
+    print("Refreshing documentation index...")
+
+    # Re-crawl
+    crawler = ReaderCrawlLoader()
+    docs = crawler.load("https://docs.example.com", max_depth=3, max_pages=200)
+
+    # Re-split
+    all_chunks = []
+    for doc in docs:
+        header_chunks = header_splitter.split_text(doc.page_content)
+        for chunk in header_chunks:
+            chunk.metadata["source"] = doc.metadata["source"]
+        final_chunks = char_splitter.split_documents(header_chunks)
+        all_chunks.extend(final_chunks)
+
+    # Replace the index
+    vectorstore.delete_collection()
+    vectorstore = Chroma.from_documents(
+        documents=all_chunks,
+        embedding=embeddings,
+        collection_name="documentation",
+        persist_directory="./chroma_db",
+    )
+
+    print(f"Index refreshed: {len(all_chunks)} chunks")
+
+# Weekly refresh
+schedule.every().sunday.at("02:00").do(refresh_documentation_index)
+```
+
+## Reader vs LangChain's Built in Web Loaders
+
+LangChain includes several web loaders. Here is how Reader compares:
+
+**WebBaseLoader** uses requests and BeautifulSoup. It fetches the raw HTML response and parses it. It cannot render JavaScript (React, Vue, Next.js sites return empty shells). It cannot handle [Cloudflare](/blog/bypass-cloudflare) or other anti bot systems. The output is raw text extracted from HTML, which includes navigation, footers, and boilerplate.
+
+**AsyncHtmlLoader** adds async HTTP fetching but has the same limitations: no JavaScript rendering, no anti bot bypass, raw HTML output.
+
+**SeleniumURLLoader** and **PlaywrightURLLoader** launch real browsers but do not include stealth features. Default headless configurations are detectable by anti bot systems. You manage browser lifecycle, timeouts, and error handling yourself.
+
+**Reader** handles JavaScript rendering, [anti bot bypass](/blog/anti-bot-detection) (browser fingerprint generation, identity randomization, [proxy rotation](/blog/proxy-rotation-strategies)), and returns clean markdown through Supermarkdown. One API call replaces the browser management, error handling, and HTML cleaning pipeline.
+
+```python
+# LangChain's WebBaseLoader (no JS, no anti-bot, raw HTML output)
+from langchain_community.document_loaders import WebBaseLoader
+loader = WebBaseLoader("https://react-app.example.com")
+docs = loader.load()  # Empty or incomplete for JS-rendered sites
+
+# Reader loader (JS rendered, anti-bot, clean markdown)
+reader_loader = ReaderLoader()
+doc = reader_loader.load_url("https://react-app.example.com")
+# Complete content, clean markdown
+```
+
+For static HTML sites with no protection, LangChain's built in loaders work fine. For anything with JavaScript rendering or anti bot protection (most production sites), Reader is the more reliable choice.
+
+## Performance Tips
+
+**Batch URLs for efficiency.** When loading multiple known URLs, use `load_urls()` (Reader's batch endpoint) rather than calling `load_url()` in a loop. Batch processes up to 1,000 URLs in parallel.
+
+**Cache aggressively.** If the same pages are loaded repeatedly across agent sessions, cache the Reader responses. LangChain's `SQLiteCache` or a simple file cache prevents redundant API calls.
+
+```python
+import hashlib
+import json
+import os
+
+CACHE_DIR = "./reader_cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+def cached_scrape(url):
+    cache_key = hashlib.md5(url.encode()).hexdigest()
+    cache_path = os.path.join(CACHE_DIR, f"{cache_key}.json")
+
+    if os.path.exists(cache_path):
+        with open(cache_path) as f:
+            cached = json.load(f)
+        return Document(
+            page_content=cached["content"],
+            metadata=cached["metadata"],
+        )
+
+    # Cache miss: scrape and store
+    loader = ReaderLoader()
+    doc = loader.load_url(url)
+
+    with open(cache_path, "w") as f:
+        json.dump({
+            "content": doc.page_content,
+            "metadata": doc.metadata,
+        }, f)
+
+    return doc
+```
+
+**Truncate for context limits.** Web pages can be long. When using Reader output as tool results in an agent, truncate to fit the agent's context window. 10,000 characters is a reasonable default for tool output.
+
+**Use extract for structured queries.** When the agent needs specific fields (price, title, date) rather than full page content, use the extract tool. The structured JSON response is smaller and more precise than full markdown.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month. The core engine is open source under Apache 2.0 at [GitHub](https://github.com/vakra-dev/reader).
+
+## Conclusion
+
+Reader integrates with LangChain at every level. As a document loader, it feeds clean markdown into RAG pipelines. As a tool, it gives agents live web access during reasoning. As a crawl source, it builds comprehensive indexes from entire documentation sites.
+
+The combination works because Reader's markdown output aligns with what LangChain expects. The `MarkdownHeaderTextSplitter` understands Reader's headings. The vector store indexes clean content without HTML noise. The agent receives clean, token efficient text from scrape tools. No HTML cleaning, no custom parsers, no preprocessing pipeline between Reader and LangChain.

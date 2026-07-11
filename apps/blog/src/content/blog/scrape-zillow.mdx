@@ -1,0 +1,414 @@
+---
+title: "How to Scrape Zillow Real Estate Listings (2026)"
+description: "Extract real estate data from Zillow including listings, prices, and property details using Python. Covers anti bot challenges and managed solutions."
+date: 2026-07-10
+author: "Nihal Kaul"
+category: "Guides"
+keywords: ["scrape zillow", "zillow scraper", "real estate scraping", "zillow data extraction"]
+schemaType: "howto"
+faq:
+  - question: "Why does a basic HTTP request to Zillow return empty HTML?"
+    answer: "Zillow is a React based single page application. The initial HTML response contains JavaScript bundles but no property data. A browser must execute the JavaScript to render listings, prices, and property details. Static HTTP libraries like requests and BeautifulSoup cannot render JavaScript."
+  - question: "What data can I get from Zillow's official APIs?"
+    answer: "Zillow offers APIs for Zestimates (automated valuations), property details, and listing data through partnerships. Access requires application and approval. The APIs provide structured, reliable data within the terms of service. Contact Zillow's data partnerships team for details."
+  - question: "What are the best alternative sources for real estate data?"
+    answer: "Public record databases (county assessor offices, state open data portals) provide property sales, tax assessments, and ownership records for free. MLS data is available through licensed partnerships for real estate professionals. Third party providers like ATTOM, CoreLogic, and Estated sell aggregated property data through APIs."
+---
+
+Zillow is the largest real estate marketplace in the United States, with data on over 100 million properties. Its listings contain information that real estate investors, analysts, and developers use for market analysis, price comparisons, and investment research: listing prices, price history, Zestimate valuations, tax records, property details, agent information, and neighborhood data.
+
+Scraping Zillow is technically challenging and legally sensitive. The site is heavily JavaScript rendered, aggressively protected against automated access, and its Terms of Service explicitly prohibit scraping. This guide covers what data Zillow pages contain, why extracting it is difficult, how to approach it with Python, important legal considerations, and alternative data sources.
+
+## What Data Zillow Contains
+
+### Search Results Pages
+
+Zillow search results display property cards in a grid or list layout. Each card shows the listing price, full address, number of bedrooms and bathrooms, square footage, listing type (for sale, for rent, recently sold, pre foreclosure), listing status (active, pending, contingent), a thumbnail image, and the listing agent or brokerage name.
+
+Search results can be filtered by price range, beds/baths, home type (house, condo, townhouse, apartment), listing status, square footage, lot size, year built, and many other criteria. The URL updates with each filter, encoding the search parameters.
+
+### Property Detail Pages
+
+Individual property pages contain significantly more data than the search cards.
+
+**Pricing and valuation.** The current listing price (or last sold price for off market properties), the Zestimate (Zillow's automated valuation model estimate), the Zestimate range (low to high confidence interval), estimated monthly payment (principal, interest, taxes, insurance), and price history showing every listing, sale, and price change going back years.
+
+**Property details.** Full address with coordinates, number of bedrooms, bathrooms (full and half), total square footage, lot size, year built, property type, parking (garage, carport, spaces), heating and cooling systems, construction materials, roof type, foundation type, and architectural style.
+
+**Financial data.** Tax assessment history (assessed value, tax amount, year), HOA fees (if applicable), estimated insurance cost, and mortgage rate estimates.
+
+**Location and neighborhood.** Walk Score, Transit Score, Bike Score, school ratings and distances (elementary, middle, high), nearby amenities, flood zone status, and noise level.
+
+**Agent and listing information.** Listing agent name and brokerage, listing date, days on market, MLS number, and listing description (written by the agent).
+
+## Why Scraping Zillow Is Challenging
+
+Zillow presents several layers of difficulty that make reliable, large scale scraping a significant engineering challenge.
+
+### Heavy JavaScript Rendering
+
+Zillow is a React based single page application. The initial HTML response from the server contains a minimal shell with JavaScript bundles. The actual listing data, search results, map markers, and property details all render dynamically through JavaScript after the page loads. A static HTTP request with Python's requests library returns an empty page with no property data.
+
+This means you need a real browser (Playwright, Puppeteer, or a managed browser service) to render the page before extracting any data.
+
+### Anti Bot Protection
+
+Zillow uses protection systems that analyze multiple signals to detect automated access. TLS fingerprinting checks whether the connection's JA3/JA4 fingerprint matches the claimed User Agent. Browser fingerprinting checks navigator.webdriver, canvas rendering, WebGL, and plugin enumeration. Behavioral analysis monitors request timing, navigation patterns, and interaction signals. IP reputation checks flag datacenter IP ranges.
+
+Standard headless browser configurations are frequently detected. Even with Playwright or Puppeteer running real Chromium, the default headless configuration exposes automation signals that Zillow's protection catches.
+
+### Selector Instability
+
+Zillow uses obfuscated CSS class names that change between deployments. Class names like `StyledPropertyCardDataArea-c11n-8-102-0__sc-1b6t22l-0` are auto generated by their CSS in JS system (styled-components) and change when the code is rebuilt. Building selectors based on these class names is fragile.
+
+More stable approaches use `data-test` attributes (which Zillow uses for their own testing), ARIA roles, and structural selectors (element hierarchy). But even these change when Zillow redesigns components.
+
+### Rate Limiting
+
+Zillow rate limits aggressively. More than a few requests per minute from the same IP triggers blocks or CAPTCHAs. The threshold is lower for search results pages (which are more expensive for Zillow to serve) than for individual property pages.
+
+## Method 1: Playwright
+
+A full browser is required because Zillow renders all content through JavaScript. Playwright with stealth configuration provides the best starting point.
+
+### Scraping Search Results
+
+```python
+from playwright.sync_api import sync_playwright
+import time
+import random
+import json
+
+def scrape_zillow_search(location, max_pages=3):
+    all_listings = []
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-features=IsolateOrigins,site-per-process",
+            ]
+        )
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/126.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080},
+            locale="en-US",
+        )
+
+        # Patch navigator.webdriver
+        context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined,
+            });
+        """)
+
+        page = context.new_page()
+
+        for page_num in range(1, max_pages + 1):
+            url = f"https://www.zillow.com/{location}/"
+            if page_num > 1:
+                url += f"{page_num}_p/"
+
+            page.goto(url, wait_until="networkidle")
+            time.sleep(random.uniform(2, 5))
+
+            # Check for CAPTCHA or block
+            if page.query_selector("form[action*='captcha']"):
+                print("CAPTCHA detected. Stopping.")
+                page.screenshot(path="zillow_captcha.png")
+                break
+
+            # Check for the "no results" state
+            if page.query_selector("[data-test='no-results']"):
+                print("No more results.")
+                break
+
+            # Extract listing data
+            listings = page.evaluate("""
+                () => {
+                    const cards = document.querySelectorAll(
+                        'article[data-test="property-card"]'
+                    );
+                    return Array.from(cards).map(card => {
+                        const price = card.querySelector(
+                            '[data-test="property-card-price"]'
+                        );
+                        const address = card.querySelector('address');
+                        const details = card.querySelector(
+                            '[data-test="property-card-details"]'
+                        );
+                        const link = card.querySelector(
+                            'a[data-test="property-card-link"]'
+                        );
+
+                        return {
+                            price: price
+                                ? price.textContent.trim() : '',
+                            address: address
+                                ? address.textContent.trim() : '',
+                            details: details
+                                ? details.textContent.trim() : '',
+                            url: link ? link.href : '',
+                        };
+                    });
+                }
+            """)
+
+            all_listings.extend(listings)
+            print(f"Page {page_num}: {len(listings)} listings "
+                  f"(total: {len(all_listings)})")
+
+            # Random delay between pages
+            time.sleep(random.uniform(3, 7))
+
+        # Screenshot for debugging
+        page.screenshot(path="zillow_results.png", full_page=True)
+        browser.close()
+
+    return all_listings
+
+# Usage
+listings = scrape_zillow_search("new-york-ny")
+for l in listings[:5]:
+    print(f"{l['address']}: {l['price']}")
+    print(f"  {l['details']}")
+```
+
+The selectors above use `data-test` attributes (`property-card`, `property-card-price`, `property-card-details`) which are more stable than CSS class names because Zillow uses them for their own automated testing. However, they can still change during redesigns.
+
+### Scraping Property Details
+
+To extract full details from individual property pages:
+
+```python
+def scrape_zillow_property(page, url):
+    page.goto(url, wait_until="networkidle")
+    time.sleep(random.uniform(2, 4))
+
+    # Check for CAPTCHA
+    if page.query_selector("form[action*='captcha']"):
+        print(f"CAPTCHA on {url}")
+        return None
+
+    details = page.evaluate("""
+        () => {
+            const getText = (sel) => {
+                const el = document.querySelector(sel);
+                return el ? el.textContent.trim() : null;
+            };
+
+            // Price
+            const price = getText('[data-test="bed-bath-beyond"] + span')
+                || getText('.summary-container span[data-testid="price"]');
+
+            // Address components
+            const address = getText('h1');
+
+            // Bed/bath/sqft from the summary bar
+            const summaryItems = document.querySelectorAll(
+                '[data-test="bed-bath-item"]'
+            );
+            const summary = Array.from(summaryItems)
+                .map(el => el.textContent.trim());
+
+            // Zestimate
+            const zestimate = getText(
+                '[data-test="zestimate-text"] span'
+            );
+
+            // Description
+            const description = getText(
+                '[data-test="description-text"]'
+            );
+
+            // Facts and features
+            const facts = {};
+            document.querySelectorAll(
+                '[data-test="facts-table"] tr'
+            ).forEach(row => {
+                const key = row.querySelector('th');
+                const val = row.querySelector('td');
+                if (key && val) {
+                    facts[key.textContent.trim()] =
+                        val.textContent.trim();
+                }
+            });
+
+            return {
+                price, address, summary, zestimate,
+                description: description
+                    ? description.substring(0, 500) : null,
+                facts,
+            };
+        }
+    """)
+
+    return details
+```
+
+Extracting full details requires visiting each property URL individually. For 100 properties, that is 100 page loads plus delays. Budget 5 to 10 seconds per property (page load, render wait, random delay). A full extraction of 100 properties takes roughly 10 to 20 minutes.
+
+### Extracting Price History
+
+Zillow property pages include a price history section showing every listing, sale, and price change:
+
+```python
+def get_price_history(page):
+    # Click to expand price history if collapsed
+    expand_btn = page.query_selector(
+        'button[aria-label*="price history"]'
+    )
+    if expand_btn:
+        expand_btn.click()
+        time.sleep(1)
+
+    history = page.evaluate("""
+        () => {
+            const rows = document.querySelectorAll(
+                '[data-test="price-history"] tr'
+            );
+            return Array.from(rows).map(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 3) {
+                    return {
+                        date: cells[0]?.textContent?.trim() || '',
+                        event: cells[1]?.textContent?.trim() || '',
+                        price: cells[2]?.textContent?.trim() || '',
+                    };
+                }
+                return null;
+            }).filter(Boolean);
+        }
+    """)
+
+    return history
+```
+
+## Using Reader
+
+Reader's browser sessions include the stealth stack with browser fingerprint generation, identity randomization, and datacenter and residential proxy pools. These features are designed for sites with aggressive [anti bot protection](/blog/anti-bot-detection).
+
+### Browser Session for Zillow
+
+```python
+from reader_py import ReaderClient
+from playwright.sync_api import sync_playwright
+
+reader = ReaderClient(api_key="rdr_your_api_key")
+
+# Create a stealth browser session
+session = reader.sessions.create()
+
+with sync_playwright() as p:
+    # Connect Playwright to Reader's stealth browser
+    browser = p.chromium.connect_over_cdp(session.ws_endpoint)
+    context = browser.contexts[0]
+    page = context.pages[0]
+
+    page.goto("https://www.zillow.com/new-york-ny/")
+    page.wait_for_selector(
+        'article[data-test="property-card"]',
+        timeout=15000
+    )
+
+    # Extract listings using Reader's stealth browser
+    listings = page.evaluate("""...""")
+    print(f"Found {len(listings)} listings")
+
+    browser.close()
+
+reader.sessions.stop(session.session_id)
+```
+
+The advantage of Reader's browser sessions over running Playwright directly is the stealth layer. Reader's browsers produce authentic Chrome TLS fingerprints, have navigator.webdriver set to false at the engine level (not patched via JavaScript), randomize canvas and WebGL fingerprints per session, and route through datacenter and residential proxy pools.
+
+### Simple Scrape for Individual Pages
+
+For individual property pages (when you have direct URLs), a basic scrape call may work:
+
+```python
+result = reader.read(
+    url="https://www.zillow.com/homedetails/123-Main-St/12345678_zpid/"
+)
+print(result.data.markdown)
+```
+
+This returns the visible content as clean markdown. Whether it succeeds depends on Zillow's current protection configuration for that specific page type.
+
+No independent success rate benchmark has been published for Reader on Zillow specifically. The stealth architecture is designed for heavily protected sites, but Zillow's defenses are among the most aggressive in real estate. Test with your target URLs before building a production pipeline.
+
+Reader is a cloud web infrastructure platform at [reader.dev](https://reader.dev) with 1,000 free pages per month.
+
+## Saving Results
+
+```python
+import csv
+import json
+
+# JSON (preserves nested data like price history and facts)
+with open("zillow_listings.json", "w", encoding="utf-8") as f:
+    json.dump(listings, f, indent=2, ensure_ascii=False)
+
+# CSV (flat format for spreadsheets)
+flat_fields = ["address", "price", "details", "url"]
+with open("zillow_listings.csv", "w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=flat_fields,
+                            extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(listings)
+
+print(f"Saved {len(listings)} listings")
+```
+
+Use JSON for property data because it handles nested structures (price history arrays, facts dictionaries) naturally. Use CSV when you need to import into spreadsheets or BI tools and can flatten the data.
+
+## Legal and Ethical Considerations
+
+This section is important. Zillow's Terms of Service explicitly prohibit automated data collection.
+
+### Zillow's Terms of Service
+
+Section 1 of Zillow's Terms of Use prohibits "use of any automated process, including but not limited to, robots, spiders, scrapers" to access the site. Zillow has actively enforced these terms through litigation.
+
+### Legal History
+
+Zillow has pursued legal action against companies and individuals who scraped their data at scale. In 2020, Zillow sent cease and desist letters to companies building products on scraped Zillow data. The legal landscape around web scraping continues to evolve, with courts reaching different conclusions depending on jurisdiction, the nature of the data, and how it is used.
+
+### What This Means in Practice
+
+Publicly displayed factual information (listing prices, addresses, property characteristics) is generally considered factual data under US law. But accessing it through automated means against the site's explicit terms of service introduces legal risk. The risk increases with scale, commercial use, and republication of the data.
+
+Before building any automated Zillow data collection system:
+
+Review Zillow's current Terms of Use in full. Consult legal counsel familiar with web scraping law in your jurisdiction. Evaluate whether the data you need is available through official channels. Assess the legal and business risk of automated collection against stated terms of service.
+
+Reader's position, consistent with industry practice, is that users are responsible for compliance with applicable laws and site terms of service in their jurisdiction. This guide is educational and does not constitute legal advice.
+
+## Alternative Data Sources
+
+Several alternatives provide real estate data without the legal concerns of scraping Zillow directly.
+
+### Zillow APIs and Data Partnerships
+
+Zillow offers APIs and data partnerships for qualified organizations. The Zillow Bridge Interactive API provides access to listing data for real estate technology companies. The Zestimate API provides automated valuations for authorized partners. Access requires application and approval.
+
+### Public Record Databases
+
+Property sales data, tax assessments, ownership records, and deed transfers are public records in most US jurisdictions. Many counties and states publish this data through open data portals. These are freely accessible without scraping or terms of service concerns.
+
+### MLS Data
+
+Multiple Listing Service data is available through partnerships, licensed data feeds, and RESO (Real Estate Standards Organization) compliant APIs for real estate professionals and technology companies. MLS provides the most comprehensive and current listing data but requires industry licensing.
+
+### Third Party Real Estate Data Providers
+
+Companies like ATTOM, CoreLogic, and Estated aggregate property data from public records and other sources and sell it through APIs. These provide structured, reliable access without scraping. Pricing varies by volume and data types.
+
+## Conclusion
+
+Zillow contains the richest real estate dataset available on the public web. It is also one of the most challenging and legally sensitive sites to scrape. Heavy JavaScript rendering, aggressive anti bot protection, obfuscated selectors, and explicit Terms of Service restrictions mean that automated data collection carries both technical and legal risk.
+
+For production real estate data needs, evaluate Zillow's official APIs, public record databases, MLS data partnerships, and third party data providers before building scrapers. If scraping is necessary for research or analysis, use tools with strong stealth capabilities, maintain reasonable request rates, and consult legal counsel about compliance in your jurisdiction.
