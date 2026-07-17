@@ -16,21 +16,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/", "/admin/"],
       },
-      // Uncomment to block AI training crawlers:
-      // {
-      //   userAgent: 'GPTBot',
-      //   disallow: '/',
-      // },
-      // {
-      //   userAgent: 'ClaudeBot',
-      //   disallow: '/',
-      // },
-      // {
-      //   userAgent: 'Google-Extended',
-      //   disallow: '/',
-      // },
     ],
     sitemap: [
       "https://reader.dev/sitemap.xml",

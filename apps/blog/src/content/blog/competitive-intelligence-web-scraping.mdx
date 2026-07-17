@@ -17,7 +17,7 @@ faq:
 
 Your competitors update their websites constantly. New features on the pricing page. Revised positioning on the homepage. Job postings that reveal strategic priorities. Product launches buried in a changelog. Blog posts that target your keywords. Each change is a signal, and the companies that detect these signals first have an advantage.
 
-Manual competitor monitoring does not scale. Checking 10 competitor websites daily takes hours. Detecting subtle copy changes or new pages requires comparing current content against previous snapshots, which is impractical by hand. Automated web scraping turns competitor websites into a continuous intelligence feed.
+Manual competitor monitoring does not scale. Checking 10 competitor websites daily takes hours. Detecting subtle copy changes or new pages requires comparing current content against previous snapshots, which is impractical by hand. Automated web scraping turns competitor websites into a continuous [competitive intelligence](/solutions/competitive-intelligence) feed.
 
 This guide covers what to monitor, how to build a change detection pipeline, how to use LLMs for automated analysis, and how Reader provides the scraping infrastructure.
 
@@ -131,7 +131,7 @@ with open(f"snapshots/{date_str}.json", "w", encoding="utf-8") as f:
     json.dump(snapshots, f, indent=2, ensure_ascii=False)
 ```
 
-Reader returns clean markdown, which is ideal for change detection because structural elements (headings, lists, tables) are preserved as text rather than HTML tags. Comparing markdown diffs is cleaner and more meaningful than comparing raw HTML diffs.
+Reader's [scrape](/scrape) returns clean markdown, which is ideal for change detection because structural elements (headings, lists, tables) are preserved as text rather than HTML tags. Comparing markdown diffs is cleaner and more meaningful than comparing raw HTML diffs.
 
 ### Step 3: Detect Changes
 
@@ -264,7 +264,7 @@ LLM analysis transforms raw data into actionable intelligence. Instead of readin
 
 ### Step 5: Crawl for Deeper Intelligence
 
-For comprehensive monitoring, crawl the competitor's entire site rather than specific pages. This discovers new pages, blog posts, and content that targeted page monitoring would miss.
+For comprehensive monitoring, [crawl](/crawl) the competitor's entire site rather than specific pages. This discovers new pages, blog posts, and content that targeted page monitoring would miss.
 
 ```python
 def deep_crawl_competitor(competitor):
@@ -300,7 +300,7 @@ Deep crawls run weekly or monthly rather than daily because they consume more cr
 
 ### Pricing Changes
 
-Extract structured pricing data for precise comparison:
+[Extract](/extract) structured pricing data for precise comparison:
 
 ```python
 pricing_result = client.read(

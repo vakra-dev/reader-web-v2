@@ -14,18 +14,18 @@ export function BottomCTA() {
           className="text-center max-w-2xl mx-auto"
         >
           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-fg">
-            Start reading the web today.
+            Start with your first URL
           </h2>
 
           <p className="text-lg text-fg-muted mb-8">
-            Completely free. 1,000 pages every month. No credit card. No catch.
+            Give your agent the web context it needs. Scrape a page, crawl a site, extract structured data, or open a browser session from one API.
           </p>
 
           <a
             href="https://console.reader.dev"
             className="inline-block px-8 py-3 bg-accent-500 text-white font-semibold rounded-md hover:bg-accent-600 transition-colors text-base glow"
           >
-            Try Reader
+            Start free
           </a>
         </motion.div>
       </div>

@@ -61,8 +61,14 @@ code, pre, .font-mono {
 .bg-grid {
   background-image: radial-gradient(circle, rgb(var(--fg-muted) / 0.35) 1px, transparent 1px);
   background-size: 24px 24px;
-  mask-image: radial-gradient(ellipse 40% 50% at center, transparent 30%, black 55%, black 65%, transparent 85%);
-  -webkit-mask-image: radial-gradient(ellipse 40% 50% at center, transparent 30%, black 55%, black 65%, transparent 85%);
+  mask-image:
+    radial-gradient(ellipse 55% 60% at center, transparent 40%, black 65%, black 75%, transparent 90%),
+    linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+  mask-composite: intersect;
+  -webkit-mask-image:
+    radial-gradient(ellipse 55% 60% at center, transparent 40%, black 65%, black 75%, transparent 90%),
+    linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+  -webkit-mask-composite: source-in;
 }
 
 /* ─── Text gradient ─── */

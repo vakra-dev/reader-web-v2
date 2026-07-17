@@ -31,7 +31,7 @@ The agent needs to read a specific page to answer a question or complete a task.
 
 **Characteristics.** Single URL. Fast response needed (the user is waiting). Clean text output (markdown) is better than raw HTML because it uses fewer tokens and is easier for the LLM to process. No interaction required, just reading.
 
-**Implementation.** A scrape call that takes a URL and returns clean markdown. The agent includes the markdown in its context and reasons about it.
+**Implementation.** A [scrape](/scrape) call that takes a URL and returns clean markdown. The agent includes the markdown in its context and reasons about it.
 
 ```python
 # Agent reads a page for context
@@ -71,7 +71,7 @@ The agent needs to interact with a web application: log in to a portal, fill a f
 
 **Characteristics.** Real browser required. Session state (cookies, authentication) must persist across steps. The agent may need to make decisions based on what it sees on each page. Speed is secondary to reliability.
 
-**Implementation.** A browser session that the agent drives through CDP (Playwright or Puppeteer). The agent navigates, interacts, and extracts data from the live page.
+**Implementation.** A [browser session](/browser) that the agent drives through CDP (Playwright or Puppeteer). The agent navigates, interacts, and extracts data from the live page.
 
 ```python
 # Agent interacts with a web application
@@ -172,7 +172,7 @@ When a full page is too large for the context, truncate intelligently:
 
 **Summary first.** Have the agent summarize the page in a first pass (using a shorter context), then use the summary for reasoning. This costs an extra LLM call but preserves the full page's information in compressed form.
 
-**Extract then reason.** Use Reader's extract capability to pull specific fields as JSON. The JSON is much smaller than the full markdown. The agent reasons about the structured data, not the full page.
+**Extract then reason.** Use Reader's [extract](/extract) capability to pull specific fields as JSON. The JSON is much smaller than the full markdown. The agent reasons about the structured data, not the full page.
 
 ```python
 # Instead of sending 5,000 tokens of markdown
@@ -294,7 +294,7 @@ Scraping is 10 to 100 times faster than browsing. A scrape returns in 1 to 5 sec
 
 ## Conclusion
 
-Web access transforms AI agents from knowledge retrievers into autonomous actors. The architecture comes down to three patterns: read (scrape a page for context), research (crawl a domain for knowledge), and act (browse for interaction). MCP connects these capabilities to AI tools through a standard protocol.
+Web access transforms [AI agents](/solutions/ai-agents) from knowledge retrievers into autonomous actors. The architecture comes down to three patterns: read (scrape a page for context), research (crawl a domain for knowledge), and act (browse for interaction). MCP connects these capabilities to AI tools through a standard protocol.
 
 The most effective agent architectures use all three patterns, selecting the right one based on the task. Reader provides all three through a single API and MCP server: scrape for reading, crawl for research, browser sessions for action. The agent gets the right web access for each task without integrating multiple services.
 

@@ -9,10 +9,13 @@ export interface SolutionPage {
     headline: string;
     bullets: string[];
   };
+  problem?: string;
   why: {
     title: string;
     description: string;
   }[];
+  capabilityGuide?: string;
+  workflowDiagram?: string;
   extractable: {
     heading: string;
     items: string;
@@ -21,6 +24,7 @@ export interface SolutionPage {
     language: string;
     code: string;
   };
+  faqs?: { question: string; answer: string }[];
   cta: {
     heading: string;
   };
@@ -28,279 +32,145 @@ export interface SolutionPage {
 
 export const solutions: SolutionPage[] = [
   {
-    slug: "ecommerce",
-    meta: {
-      title: "E-commerce Data Extraction API | Reader",
-      description:
-        "Extract product data, prices, and inventory from any e-commerce site. JavaScript rendering and anti-bot bypass handled. 1,000 free pages per month.",
-    },
-    hero: {
-      eyebrow: "E-commerce",
-      headline: "Extract product data from any e-commerce site",
-      bullets: [
-        "Monitor competitor prices across thousands of product pages",
-        "Track inventory availability and stock changes",
-        "Extract product details, specifications, and reviews at scale",
-        "Clean output ready for analysis, databases, and AI pipelines",
-      ],
-    },
-    why: [
-      {
-        title: "JavaScript rendering",
-        description:
-          "E-commerce sites are built with React, Next.js, and other JavaScript frameworks. Reader renders every page in a real browser so dynamic prices, stock status, and product details are captured completely.",
-      },
-      {
-        title: "Anti-bot bypass",
-        description:
-          "Amazon, Shopify, Walmart, and other platforms use aggressive bot detection. Reader handles TLS fingerprinting, browser identity generation, and proxy rotation automatically.",
-      },
-      {
-        title: "Scale with crawling",
-        description:
-          "Crawl entire product catalogs with BFS discovery. Set depth and page limits to target specific categories. URL pattern filtering focuses on product pages and skips admin and checkout flows.",
-      },
-    ],
-    extractable: {
-      heading: "What you can extract",
-      items:
-        "Product titles, prices (base and sale), descriptions, specifications, images, ratings, review counts, availability status, seller information, variant data, category tags, and SKU identifiers.",
-    },
-    codeExample: {
-      language: "python",
-      code: `from reader_py import ReaderClient
-
-reader = ReaderClient(api_key="rdr_your_api_key")
-
-# Scrape a product page with structured extraction
-result = reader.read(
-    url="https://store.example.com/product/123",
-    extract={
-        "schema": {
-            "title": "string",
-            "price": "number",
-            "in_stock": "boolean",
-            "rating": "number"
-        }
-    }
-)
-
-print(result.data.extracted)`,
-    },
-    cta: {
-      heading: "Start extracting e-commerce data today",
-    },
-  },
-  {
-    slug: "real-estate",
-    meta: {
-      title: "Real Estate Data Extraction API | Reader",
-      description:
-        "Extract property listings, prices, and market data from real estate platforms. Browser sessions handle JavaScript heavy sites.",
-    },
-    hero: {
-      eyebrow: "Real Estate",
-      headline: "Extract property data from real estate platforms",
-      bullets: [
-        "Pull listing prices, property details, and market data at scale",
-        "Handle JavaScript heavy property sites with browser sessions",
-        "Track price changes and new listings with automated crawling",
-        "Clean structured output for analysis and investment research",
-      ],
-    },
-    why: [
-      {
-        title: "Browser sessions for heavy JavaScript",
-        description:
-          "Real estate platforms render listings dynamically. Reader's browser sessions provide full Chromium rendering with CDP access for sites that require scrolling, clicking, and interaction.",
-      },
-      {
-        title: "Anti-bot protection handling",
-        description:
-          "Property sites use protection systems that block standard scrapers. Reader handles TLS fingerprinting, browser fingerprint generation, and proxy rotation automatically.",
-      },
-      {
-        title: "Crawl listings at scale",
-        description:
-          "Discover and extract data from hundreds of property listings with BFS crawling. Filter by URL patterns to target specific neighborhoods, price ranges, or property types.",
-      },
-    ],
-    extractable: {
-      heading: "What you can extract",
-      items:
-        "Listing prices, addresses, bedrooms and bathrooms, square footage, property type, listing status, price history, tax records, agent information, neighborhood data, and property photos.",
-    },
-    cta: {
-      heading: "Start extracting real estate data today",
-    },
-  },
-  {
-    slug: "lead-generation",
-    meta: {
-      title: "Web Scraping for Lead Generation | Reader",
-      description:
-        "Automate lead data collection from company websites and directories. Extract contacts and business signals at scale.",
-    },
-    hero: {
-      eyebrow: "Lead Generation",
-      headline: "Automate lead data collection from the web",
-      bullets: [
-        "Scrape company websites for enrichment data and contact information",
-        "Crawl business directories and listings for prospect discovery",
-        "Extract firmographics, technology stacks, and business signals",
-        "Feed clean data into your CRM through the API or no code integrations",
-      ],
-    },
-    why: [
-      {
-        title: "Crawl directories and listings",
-        description:
-          "Discover target companies across business directories and industry listings automatically. BFS crawling with URL pattern filtering focuses on the pages that contain the data you need.",
-      },
-      {
-        title: "Structured extraction",
-        description:
-          "Pull specific fields from company pages: names, addresses, phone numbers, team members, technology stacks. Define a schema and get validated JSON back.",
-      },
-      {
-        title: "Browser sessions for portals",
-        description:
-          "Some directories and business platforms require login or interaction before showing data. Reader's browser sessions handle authenticated access through full CDP compatibility.",
-      },
-    ],
-    extractable: {
-      heading: "What you can extract",
-      items:
-        "Company names, addresses, phone numbers, email patterns, employee counts, technology stacks, social profiles, job postings, revenue signals, founding dates, and industry classifications.",
-    },
-    cta: {
-      heading: "Start building your lead pipeline today",
-    },
-  },
-  {
-    slug: "price-monitoring",
-    meta: {
-      title: "Automated Price Monitoring with Web Scraping | Reader",
-      description:
-        "Track competitor prices automatically across any website. Detect price changes, promotions, and availability shifts.",
-    },
-    hero: {
-      eyebrow: "Price Monitoring",
-      headline: "Track competitor prices automatically",
-      bullets: [
-        "Monitor pricing across competitor websites on a schedule",
-        "Detect price changes, promotions, and availability shifts",
-        "Extract pricing data from JavaScript heavy e-commerce platforms",
-        "Export structured data for analysis and dynamic pricing decisions",
-      ],
-    },
-    why: [
-      {
-        title: "Scheduled scraping at scale",
-        description:
-          "Set up automated scraping on your cadence. Daily, weekly, or hourly. Reader handles the infrastructure so you focus on the pricing strategy.",
-      },
-      {
-        title: "Structured price extraction",
-        description:
-          "Define a schema for the price fields you need. Reader returns validated JSON with the current price, original price, discount percentage, and availability status.",
-      },
-      {
-        title: "Anti-bot for e-commerce",
-        description:
-          "Competitor pricing pages are among the most heavily protected pages on the web. Reader's stealth stack and proxy rotation handle the protection automatically.",
-      },
-    ],
-    extractable: {
-      heading: "What you can track",
-      items:
-        "Current prices, original prices, discount amounts and percentages, stock availability, shipping costs, promotional offers, variant pricing, and bundle deals.",
-    },
-    cta: {
-      heading: "Start monitoring prices today",
-    },
-  },
-  {
     slug: "competitive-intelligence",
     meta: {
-      title: "Competitive Intelligence Automation | Reader",
+      title: "Competitive Intelligence Web Data API for AI Agents | Reader",
       description:
-        "Monitor competitor websites for pricing changes, feature launches, and content updates. Automated crawling with change detection.",
+        "Use Reader to collect clean website content from public competitor pages and power competitive intelligence workflows with Markdown, structured data, and page snapshots.",
     },
     hero: {
       eyebrow: "Competitive Intelligence",
-      headline: "Monitor competitors without manual research",
+      headline: "Turn public competitor websites into clean context your team can analyze",
       bullets: [
-        "Track competitor website changes, feature launches, and messaging updates",
-        "Monitor pricing pages, product updates, and content strategy shifts",
-        "Detect hiring signals from job postings",
-        "Automated crawling with change detection and LLM summarization",
+        "Scrape competitor pages into clean Markdown snapshots for version comparison",
+        "Extract structured signals from pricing, positioning, product, and docs pages",
+        "Crawl competitor websites for broader research and page discovery",
+        "Store snapshots over time and use your own logic for change detection and alerts",
       ],
     },
+    problem:
+      "Competitive intelligence usually starts with public web pages.\n\nA competitor changes their homepage. A pricing page adds a new plan. A product page highlights a new feature. A documentation page reveals a new integration. A careers page suggests where the company is investing.\n\nThose signals are useful, but collecting them manually does not scale. Teams often end up checking websites by hand, saving screenshots, or building custom scrapers for every competitor. The result is inconsistent.\n\nReader gives competitive intelligence workflows a cleaner foundation. Use Reader to collect public competitor pages as clean Markdown, metadata, crawl results, screenshots, or structured JSON.",
     why: [
       {
-        title: "Automated crawling",
+        title: "Clean Markdown snapshots",
         description:
-          "Crawl competitor domains on a schedule. Reader discovers and extracts content from every page, giving you a complete snapshot of their public web presence.",
+          "Reader returns clean Markdown instead of noisy page HTML, making it easier to store page snapshots, compare versions, and identify what changed on a competitor's homepage, pricing page, product page, or docs.",
       },
       {
-        title: "Clean markdown for LLM analysis",
+        title: "Structured extraction for signals",
         description:
-          "Reader returns clean markdown that you can feed directly to an LLM for automated summarization, comparison, and trend analysis. No HTML parsing needed.",
+          "Extract structured fields such as plan names, feature lists, usage limits, trial language, enterprise messaging, headlines, value propositions, and use cases from public competitor pages.",
       },
       {
-        title: "Change detection",
+        title: "Crawl competitor websites",
         description:
-          "Compare current crawl results with previous snapshots. Identify what changed: new pages, updated pricing, modified features, new job postings.",
+          "Start from a homepage or product section and use Crawl to collect related public pages. Discover new product pages, integration pages, comparison pages, changelogs, and documentation updates.",
       },
     ],
+    capabilityGuide:
+      "Start with Scrape for specific competitor pages. Use Crawl for broader website research. Add Extract when you need structured fields for comparison. Use Browser only when the page requires interaction such as pricing toggles, tabs, or filters.",
+    workflowDiagram:
+      "Competitor URLs\n  -> Reader scrape or crawl\n  -> Clean Markdown and metadata\n  -> Snapshot storage\n  -> Change comparison\n  -> AI summary or analyst review\n  -> Alerts, reports, or dashboards",
     extractable: {
       heading: "What you can monitor",
       items:
-        "Pricing and packaging pages, product feature lists, marketing messaging and positioning, blog and content strategy, job postings and hiring signals, technology stack changes, and partnership announcements.",
+        "Homepage positioning and headlines, pricing plans and feature lists, product feature pages and messaging, documentation and changelog updates, integration and partnership pages, careers and hiring signals, comparison pages, use case pages, trial and enterprise language.",
     },
+    faqs: [
+      {
+        question: "What is Reader for competitive intelligence?",
+        answer:
+          "Reader helps teams collect clean public web content from competitor websites so their own systems can store snapshots, extract signals, compare changes, and summarize updates.",
+      },
+      {
+        question: "Can Reader monitor competitor websites automatically?",
+        answer:
+          "Reader provides the web data layer. Your application should handle scheduling, storage, comparison, alerting, and reporting.",
+      },
+      {
+        question: "What competitor pages should I track?",
+        answer:
+          "Common pages include homepages, pricing pages, product pages, feature pages, documentation, changelogs, integration pages, comparison pages, and careers pages.",
+      },
+      {
+        question: "Can Reader extract pricing page details?",
+        answer:
+          "Yes. Reader can extract structured fields such as plan names, feature lists, usage limits, trial language, and enterprise messaging when those details appear on the page.",
+      },
+      {
+        question: "Can Reader crawl competitor websites?",
+        answer:
+          "Yes. Reader Crawl can start from a URL and collect related public pages based on limits, depth, and URL filters.",
+      },
+      {
+        question: "Should I store Markdown snapshots?",
+        answer:
+          "Yes. Markdown snapshots make it easier to compare versions, inspect changes, summarize updates, and preserve source context.",
+      },
+      {
+        question: "Can Reader help with AI competitive analysis?",
+        answer:
+          "Yes. Reader can collect the source context an AI agent needs. Your agent can then summarize changes, compare competitors, and produce reports with source links.",
+      },
+      {
+        question: "How do credits work for competitive intelligence?",
+        answer:
+          "Usage depends on pages scraped or crawled, refresh frequency, premium mode usage, extraction usage, and browser session time.",
+      },
+      {
+        question: "When should I use Browser?",
+        answer:
+          "Use Browser when the page requires interaction, such as pricing toggles, tabs, filters, screenshots, PDFs, or rendered page state.",
+      },
+    ],
     cta: {
-      heading: "Start monitoring competitors today",
+      heading: "Build competitive intelligence on clean web context",
     },
   },
   {
     slug: "rag-pipelines",
     meta: {
-      title: "Web Data for RAG Pipelines | Reader",
+      title: "Crawl Websites for RAG Pipelines | Reader",
       description:
-        "Crawl websites to clean markdown for retrieval augmented generation. 67 to 87 percent fewer tokens than raw HTML. Built for LLM pipelines.",
+        "Use Reader to scrape and crawl websites into clean Markdown, metadata, and source linked content for RAG pipelines, AI search, and knowledge ingestion.",
     },
     hero: {
       eyebrow: "RAG Pipelines",
-      headline: "Feed live web data into your RAG pipeline",
+      headline: "Turn public websites into clean Markdown your retrieval system can use",
       bullets: [
-        "Crawl documentation sites and knowledge bases to clean markdown",
-        "Output optimized for chunking, embedding, and retrieval",
-        "67 to 87 percent fewer tokens than raw HTML input",
-        "Keep your pipeline fresh with scheduled re crawls",
+        "Scrape and crawl websites into page level Markdown and metadata",
+        "Preserve headings, lists, tables, code blocks, and links for better chunking",
+        "Keep source URLs and metadata with every page for citations and refresh",
+        "Handle JavaScript rendered documentation and help center pages",
       ],
     },
+    problem:
+      "A RAG pipeline is only as good as the content it retrieves.\n\nIf your source data is noisy, incomplete, duplicated, or hard to chunk, the retrieval layer will struggle. The model may receive the wrong context, miss important details, or answer from boilerplate instead of the actual page content.\n\nWeb content makes this harder. A useful page may be surrounded by navigation links, sidebars, scripts, cookie banners, footers, tracking code, and styling. Documentation sites may use client side rendering.\n\nReader gives your RAG pipeline a cleaner starting point. Use Reader to turn URLs and websites into Markdown that keeps useful structure while removing much of the noise that raw HTML introduces.",
     why: [
       {
         title: "Markdown chunks better",
         description:
-          "Clean markdown has explicit structural markers (headings, lists, tables) that make semantic chunking straightforward. Raw HTML buries structure in tag attributes and wastes tokens on navigation, scripts, and styling.",
+          "Clean Markdown has explicit structural markers (headings, lists, tables, code blocks) that make semantic chunking straightforward. Raw HTML buries structure in tag attributes and wastes tokens on navigation, scripts, and styling.",
       },
       {
-        title: "Token efficiency at scale",
+        title: "Source metadata for citations",
         description:
-          "A typical 3,000 word article uses roughly 8,000 tokens as HTML but only 2,800 as clean markdown. At scale, this 67 percent reduction directly lowers embedding costs and fits more content per context window.",
+          "Reader responses include page metadata such as title, description, URL, status, and scrape time. Your ingestion pipeline can carry that metadata forward into chunk records for citations, debugging, and refresh workflows.",
       },
       {
         title: "Crawl entire knowledge bases",
         description:
-          "BFS crawling with depth and page limits lets you index entire documentation sites, help centers, and content libraries. URL pattern filtering targets the content sections and skips navigation pages.",
+          "Crawl documentation sites, help centers, and content libraries from a seed URL. Use depth limits, page limits, include patterns, and exclude patterns to keep the crawl focused on the pages that should become part of the retrieval index.",
       },
     ],
+    capabilityGuide:
+      "Use Scrape when you need one page. Use batch scraping when you already have a URL list. Use Crawl when you need Reader to discover pages from a starting URL. Use Browser only when content appears after direct interaction.",
+    workflowDiagram:
+      "Website URL\n  -> Reader scrape or crawl\n  -> Clean Markdown and metadata\n  -> Chunking\n  -> Embeddings\n  -> Vector store or search index\n  -> Retrieval\n  -> Answer generation with source links",
     extractable: {
       heading: "What you get",
       items:
-        "Clean markdown with preserved headings, lists, tables, and code blocks. Structural markers that enable semantic chunking. Consistent output format across any source website.",
+        "Clean Markdown with preserved headings, lists, tables, code blocks, and links. Page level metadata including title, URL, status, and scrape time. Consistent output format across any source website. Structural markers that enable semantic chunking.",
     },
     codeExample: {
       language: "python",
@@ -321,97 +191,258 @@ for page in result.data:
     embeddings = embed(chunks)
     store(embeddings)`,
     },
+    faqs: [
+      {
+        question: "What is Reader for RAG pipelines?",
+        answer:
+          "Reader helps RAG pipelines scrape and crawl websites into clean Markdown, metadata, and page level results that can be chunked, embedded, stored, and retrieved.",
+      },
+      {
+        question: "Can Reader crawl documentation for RAG?",
+        answer:
+          "Yes. Reader can start from a documentation URL, discover related pages, and return clean Markdown for each page collected.",
+      },
+      {
+        question: "Why use Markdown for RAG?",
+        answer:
+          "Markdown preserves useful structure such as headings, lists, links, tables, and code blocks while removing much of the noise found in raw HTML.",
+      },
+      {
+        question: "Does Reader replace my vector database?",
+        answer:
+          "No. Reader handles web scraping, crawling, and cleanup. Your application still owns chunking, embeddings, vector storage, retrieval, reranking, and answer generation.",
+      },
+      {
+        question: "Can Reader handle JavaScript heavy docs?",
+        answer:
+          "Reader can render modern pages before returning content, which is useful for documentation sites and frontend applications.",
+      },
+      {
+        question: "Can I keep source URLs with chunks?",
+        answer:
+          "Yes. Reader returns page level data and metadata that your pipeline can carry into chunk records for citations, debugging, and refreshes.",
+      },
+      {
+        question: "How do credits work for RAG ingestion?",
+        answer:
+          "RAG usage is usually based on pages scraped or crawled. Standard scrapes cost 1 credit per page, premium scrapes cost 3 credits per page, and crawls cost based on pages discovered and scraped.",
+      },
+      {
+        question: "Should I crawl an entire website?",
+        answer:
+          "Only if the whole website is useful to the retrieval task. Use limits, depth controls, include patterns, and exclude patterns to keep your index focused.",
+      },
+      {
+        question: "Can Reader extract structured data for RAG?",
+        answer:
+          "Yes. Reader can extract structured JSON from pages when your workflow needs fields in addition to Markdown.",
+      },
+    ],
     cta: {
-      heading: "Start building your RAG pipeline today",
+      heading: "Build RAG on cleaner web content",
     },
   },
   {
     slug: "ai-agents",
     meta: {
-      title: "Web Access for AI Agents via MCP | Reader",
+      title: "Web Context API for AI Agents | Reader",
       description:
-        "Give AI agents web access with 9 MCP tools. Scrape, crawl, browse, and extract from any website. Works with Claude Code, Cursor, and VS Code.",
+        "Give AI agents reliable web context with scraping, crawling, structured extraction, browser sessions, clean Markdown, and developer friendly APIs.",
     },
     hero: {
       eyebrow: "AI Agents",
-      headline: "Give your AI agents real web access",
+      headline: "Give your AI agent reliable access to live web content",
       bullets: [
-        "9 MCP tools for scraping, crawling, browsing, and extracting",
-        "Works with Claude Code, Cursor, VS Code, Windsurf, and every MCP client",
-        "Browser sessions for authenticated workflows and interactive pages",
-        "Clean markdown context that fits more information per token",
+        "Scrape pages into clean Markdown for source reading, summarization, and research",
+        "Crawl websites for broader context sets across documentation, products, and help centers",
+        "Extract structured JSON fields from public pages using a schema or instruction",
+        "Use browser sessions when pages need interaction before content appears",
       ],
     },
+    problem:
+      "AI agents are only as useful as the context they can access.\n\nA model can reason, summarize, compare, and decide what to do next, but it still needs reliable input. When the task involves the web, that input is rarely clean. Search results are shallow. Raw HTML is noisy. JavaScript heavy pages may not include the useful content in the first response. Multi page research requires crawling. Some workflows require clicking, filtering, or navigating before the right information appears.\n\nTeams end up building scrapers, crawlers, browser workers, content cleaners, Markdown converters, extraction prompts, retry logic, queues, and usage controls before the agent can do useful work.\n\nReader gives agents a cleaner path to the web.",
     why: [
       {
-        title: "MCP server with 9 tools",
+        title: "Read, research, extract, and interact",
         description:
-          "Reader's MCP server exposes scrape, batch scrape, crawl, discover, extract, browser session creation, job status, job cancellation, and credit checking. Install once, use from any MCP compatible AI tool.",
+          "Reader gives agent workflows four core capabilities: Scrape (read a page), Crawl (research a website), Extract (get structured JSON fields), and Browser (interact with pages that need clicks, forms, or navigation). One API, one key.",
       },
       {
-        title: "Browser sessions for agent actions",
+        title: "Clean Markdown as agent context",
         description:
-          "When your agent needs to log in, fill forms, or navigate multi step workflows, Reader provides full CDP browser sessions. Your agent drives a real, stealthed Chrome browser.",
+          "Reader converts web pages into clean Markdown that preserves useful structure such as headings, lists, links, tables, and code blocks. Markdown gives agents a better middle ground between raw HTML and plain text.",
       },
       {
-        title: "Token efficient context",
+        title: "Controlled and predictable web access",
         description:
-          "Clean markdown uses 67 to 87 percent fewer tokens than raw HTML. Your agent gets more useful web content per context window, improving comprehension and reducing API costs.",
+          "Start with the lightest tool that solves the problem. If the agent needs one page, scrape it. If it needs many pages, crawl them. If it needs fields, extract them. If it needs interaction, open a browser session. That structure makes agents easier to control and debug.",
       },
     ],
+    capabilityGuide:
+      "Use Scrape to read one source URL or summarize a page. Use Crawl to research a full website or ingest documentation. Use Extract to pull fields from a page or store structured records. Use Browser to work with dynamic page state or click, type, and navigate. Use the API, SDK, CLI, or MCP server to connect web context to your assistant.",
+    workflowDiagram:
+      "User request\n  -> Agent decides it needs web context\n  -> Reader scrapes, crawls, extracts, or opens a browser session\n  -> Your system stores or filters the result\n  -> Agent reasons over the context\n  -> Product returns an answer, record, alert, or action",
     extractable: {
-      heading: "Install in one command",
-      items: "",
+      heading: "What Reader gives your agent",
+      items:
+        "Clean Markdown from any web page. Crawl results from full websites. Structured JSON extraction with a schema or instruction. Browser sessions with Playwright or Puppeteer compatibility. Page metadata including title, URL, status, and scrape time. API, SDK, CLI, and MCP server access.",
     },
     codeExample: {
       language: "bash",
-      code: `claude mcp add reader -- npx -y @vakra-dev/reader-mcp`,
+      code: `# Claude Code
+claude mcp add reader -- npx -y @vakra-dev/reader-mcp
+
+# Cursor / VS Code (settings.json)
+{
+  "mcpServers": {
+    "reader": {
+      "command": "npx",
+      "args": ["-y", "@vakra-dev/reader-mcp"],
+      "env": { "READER_API_KEY": "rdr_your_api_key" }
+    }
+  }
+}`,
     },
+    faqs: [
+      {
+        question: "What is a web context API for AI agents?",
+        answer:
+          "A web context API helps agents collect usable information from the web. That context can be clean Markdown, metadata, structured JSON, crawl results, or browser controlled page state.",
+      },
+      {
+        question: "How is Reader different from a normal scraper?",
+        answer:
+          "A normal scraper usually fetches a page and returns HTML. Reader is designed for agent workflows, with clean Markdown, crawling, extraction, browser sessions, async jobs, SDKs, and MCP support.",
+      },
+      {
+        question: "Can Reader give my agent live web access?",
+        answer:
+          "Yes. Reader can scrape pages, crawl websites, extract structured data, and create browser sessions that your agent workflow can use.",
+      },
+      {
+        question: "Does Reader work with RAG pipelines?",
+        answer:
+          "Yes. Reader can crawl or scrape web pages into clean Markdown that your system can chunk, embed, store, and retrieve.",
+      },
+      {
+        question: "Can Reader extract structured data for agents?",
+        answer:
+          "Yes. Reader can extract JSON fields from web pages using a schema or instruction, then return the result with the page context.",
+      },
+      {
+        question: "When should an agent use Browser?",
+        answer:
+          "Use Browser when the page requires interaction, such as clicks, forms, navigation, screenshots, PDFs, or rendered page state. Use Scrape or Crawl when the agent only needs content.",
+      },
+      {
+        question: "Does Reader replace my agent framework?",
+        answer:
+          "No. Reader provides the web context layer. Your product still controls the agent framework, prompts, tools, memory, storage, user experience, and business logic.",
+      },
+      {
+        question: "Can I control how much web context an agent collects?",
+        answer:
+          "Yes. Use limits, crawl depth, filters, tool selection, and credit checks to keep workflows focused.",
+      },
+    ],
     cta: {
-      heading: "Give your agents web access today",
+      heading: "Give your agent reliable web context",
     },
   },
   {
-    slug: "llm-training-data",
+    slug: "llm-dataset-collection",
     meta: {
-      title: "Web Data for LLM Training and Fine Tuning | Reader",
+      title: "Web Data Collection for LLM Datasets | Reader",
       description:
-        "Collect training data from the web at scale. Clean, consistent markdown output. Self host for data sovereignty. Apache 2.0 open source.",
+        "Use Reader to collect clean Markdown from public web pages for LLM evaluation datasets, fine tuning preparation, research corpora, and AI data workflows.",
     },
     hero: {
-      eyebrow: "LLM Training Data",
-      headline: "Collect training data from the web at scale",
+      eyebrow: "LLM Dataset Collection",
+      headline: "Turn public web pages into clean Markdown for model datasets and AI data workflows",
       bullets: [
-        "Crawl domains at scale with configurable depth and page limits",
-        "Clean, consistent markdown output through Supermarkdown",
-        "URL pattern filtering to target specific content types",
-        "Self host on your infrastructure for full data sovereignty",
+        "Scrape and crawl public websites into clean Markdown and page level metadata",
+        "Preserve headings, lists, tables, code blocks, and links for inspectable dataset records",
+        "Keep source URLs and provenance with every record for audit and refresh",
+        "Use crawl limits, depth controls, and URL filters to collect the right source material",
       ],
     },
+    problem:
+      "Web pages are one of the most useful sources of language data. They contain documentation, product information, articles, help center content, policies, tutorials, listings, reviews, technical references, and public company pages.\n\nBut raw web pages are not ready to become model data. A single page may include navigation links, cookie banners, sidebars, scripts, styles, ads, footer content, tracking code, and content that only appears after JavaScript runs.\n\nEvaluation examples may include irrelevant text. Fine tuning examples may include boilerplate. Retrieval datasets may contain duplicate chunks. Research corpora may be hard to inspect or reproduce.\n\nReader gives AI data workflows a cleaner starting point.",
     why: [
       {
-        title: "Consistent, clean output",
+        title: "Consistent, clean Markdown output",
         description:
-          "Supermarkdown, Reader's Rust HTML to markdown engine, produces consistent output across any website. Navigation, ads, scripts, and boilerplate are stripped. What remains is clean text with structural markers preserved.",
+          "Reader produces consistent Markdown across any website. Navigation, ads, scripts, and boilerplate are stripped. What remains is clean text with structural markers preserved for headings, lists, tables, code blocks, and links.",
       },
       {
-        title: "Scale with control",
+        title: "Source provenance with every record",
         description:
-          "Crawl up to 10,000 pages per job with configurable depth. Include and exclude URL patterns target specific content types. Rate limiting protects both your infrastructure and the target site.",
+          "Each page retains source metadata such as URL, title, scrape time, status, and cache information. Your dataset pipeline can carry that provenance through filtering, labeling, and transformation for audit, refresh, and removal.",
       },
       {
-        title: "Self host for data sovereignty",
+        title: "Crawl with control",
         description:
-          "The engine is Apache 2.0 on GitHub. Deploy on your own infrastructure. Data never leaves your network. No third party API calls for sensitive training pipelines.",
+          "Crawl documentation, help centers, and public websites with configurable depth, page limits, include patterns, and exclude patterns. Collect the right source material for your dataset without collecting everything.",
       },
     ],
+    capabilityGuide:
+      "Use Scrape when you know the exact pages. Use batch scraping when your workflow has a URL list. Use Crawl to discover related pages from a seed URL such as a documentation site, help center, or public knowledge base. Use Extract when records need structured fields in addition to Markdown.",
+    workflowDiagram:
+      "Source URLs\n  -> Reader scrape or crawl\n  -> Clean Markdown and metadata\n  -> Filtering and review\n  -> Deduplication\n  -> Labeling or transformation\n  -> Dataset storage\n  -> Evaluation, fine tuning, retrieval, or analysis",
     extractable: {
       heading: "What you get",
       items:
-        "Clean, consistent markdown from any website. Structural markers preserved for downstream processing. Configurable crawling with depth limits, page limits, and URL pattern filtering.",
+        "Clean, consistent Markdown from any website. Page level metadata including URL, title, status, and scrape time. Configurable crawling with depth limits, page limits, and URL pattern filtering. Structured extraction for records that need searchable fields or labels.",
     },
+    faqs: [
+      {
+        question: "What is Reader for LLM datasets?",
+        answer:
+          "Reader helps teams collect public web pages as clean Markdown and metadata for LLM evaluation datasets, fine tuning preparation, research corpora, retrieval systems, and AI workflows.",
+      },
+      {
+        question: "Can Reader collect web data for model training?",
+        answer:
+          "Reader can collect public web content your workflow is allowed to access. Your team should review, filter, deduplicate, and prepare that content before using it in any model training workflow.",
+      },
+      {
+        question: "Why use Markdown for LLM datasets?",
+        answer:
+          "Markdown preserves useful page structure such as headings, lists, links, tables, and code blocks while removing much of the noise found in raw HTML.",
+      },
+      {
+        question: "Can Reader crawl documentation for datasets?",
+        answer:
+          "Yes. Reader can crawl documentation and return page level Markdown and metadata that your pipeline can review, chunk, label, or store.",
+      },
+      {
+        question: "Does Reader create fine tuning examples automatically?",
+        answer:
+          "No. Reader provides source content. Your pipeline should transform reviewed content into fine tuning examples if that is your intended use case.",
+      },
+      {
+        question: "Can Reader help with evaluation datasets?",
+        answer:
+          "Yes. Reader can collect realistic source content that your team can use to build grounded evaluation tasks, questions, expected answers, or extraction checks.",
+      },
+      {
+        question: "Should I keep source URLs with dataset records?",
+        answer:
+          "Yes. Source URLs and metadata help with review, refresh, debugging, provenance, and removal requests.",
+      },
+      {
+        question: "Can Reader extract structured fields for datasets?",
+        answer:
+          "Yes. Reader Extract can return JSON fields from web pages when your dataset needs structured records in addition to Markdown.",
+      },
+      {
+        question: "How do credits work for dataset collection?",
+        answer:
+          "Usage depends on pages scraped or crawled, premium mode usage, extraction usage, browser session time, and refresh frequency.",
+      },
+    ],
     cta: {
-      heading: "Start collecting training data today",
+      heading: "Build LLM datasets from cleaner web content",
     },
   },
 ];

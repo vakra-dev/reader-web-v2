@@ -7,8 +7,20 @@ import { ComparisonContent } from "./comparison-content";
 
 type Params = { slug: string };
 
+const DEDICATED_PAGES = new Set([
+  "firecrawl",
+  "scrapingbee",
+  "zenrows",
+  "browserbase",
+  "apify",
+  "bright-data",
+  "zyte",
+]);
+
 export function generateStaticParams() {
-  return comparisons.map((c) => ({ slug: c.slug }));
+  return comparisons
+    .filter((c) => !DEDICATED_PAGES.has(c.slug))
+    .map((c) => ({ slug: c.slug }));
 }
 
 export async function generateMetadata({

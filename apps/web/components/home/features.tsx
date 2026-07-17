@@ -6,30 +6,30 @@ import { Globe, Layers, Monitor, Braces } from "lucide-react";
 const capabilities = [
   {
     icon: Globe,
-    title: "Read",
+    title: "Scrape a page",
     description:
-      "Give Reader a URL. Get back clean markdown, HTML, or structured data. JavaScript rendering, anti-bot protection, proxy rotation. All handled automatically. One credit, one page, every time.",
+      "Send Reader a URL and get back clean page content. Markdown for model context, HTML for inspection, metadata for storage, screenshots for visual checks, and raw page content when your system needs lower level access.",
     badge: null,
   },
   {
     icon: Layers,
-    title: "Crawl",
+    title: "Crawl a website",
     description:
-      "Map and extract content across thousands of pages. Set your depth, define patterns, get structured output at scale. No infrastructure to manage.",
-    badge: null,
-  },
-  {
-    icon: Monitor,
-    title: "Browse",
-    description:
-      "Spin up cloud browser sessions with full Playwright/Puppeteer compatibility. Log into portals, navigate authenticated dashboards, hold sessions for hours. Your scripts connect over CDP - zero new APIs to learn.",
+      "Start from one URL and collect multiple pages from a website. Control depth, limits, and URL patterns so your crawler collects the pages that matter without turning every task into an open ended crawl.",
     badge: null,
   },
   {
     icon: Braces,
-    title: "Extract",
+    title: "Extract structured data",
     description:
-      "Pull structured data from any page with a JSON schema or natural language prompt. Prices, contacts, product specs - returned as typed JSON. Powered by AI, validated on output.",
+      "When your workflow needs fields instead of full text, Reader can extract structured JSON from web content. Define the data shape you want with a schema or instruction, and get usable fields back with the page context.",
+    badge: null,
+  },
+  {
+    icon: Monitor,
+    title: "Open a browser session",
+    description:
+      "Some pages need real interaction. Reader Browser lets your workflow launch a cloud browser session and connect with automation tools such as Playwright or Puppeteer for clicks, navigation, forms, screenshots, PDFs, and rendered state.",
     badge: null,
   },
 ];
@@ -59,10 +59,10 @@ export function Features() {
           className="text-center mb-16"
         >
           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-fg">
-            What Reader Does
+            One API for the web context agents keep needing
           </h2>
           <p className="text-lg text-fg-muted max-w-xl mx-auto">
-            Four primitives. One platform. Complete web access.
+            Reader helps your agent work with the web in four core ways.
           </p>
         </motion.div>
 

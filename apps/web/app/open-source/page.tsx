@@ -4,14 +4,14 @@ import { Footer } from "@/components/layout/footer";
 import { OpenSourceContent } from "./content";
 
 export const metadata: Metadata = {
-  title: "Open Source Web Scraping Platform | Reader",
+  title: "Open Source Web Context API for AI Agents | Reader",
   description:
-    "Reader is open source under Apache 2.0. Self host the entire platform on your infrastructure. No feature gaps, no licensing restrictions.",
+    "Explore Reader's open source approach to web context for AI agents, including clean Markdown, scraping, crawling, extraction, browser workflows, SDKs, CLI, and GitHub.",
   alternates: { canonical: "https://reader.dev/open-source" },
   openGraph: {
-    title: "Open Source Web Scraping Platform | Reader",
+    title: "Open Source Web Context API for AI Agents | Reader",
     description:
-      "Reader is open source under Apache 2.0. Self host the entire platform on your infrastructure. No feature gaps.",
+      "Explore Reader's open source approach to web context for AI agents, including clean Markdown, scraping, crawling, extraction, browser workflows, SDKs, CLI, and GitHub.",
     url: "https://reader.dev/open-source",
     type: "website",
   },

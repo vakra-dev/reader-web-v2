@@ -1,7 +1,46 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { ChevronDown } from "lucide-react";
+import { useState } from "react";
 import type { SolutionPage } from "../data";
+
+function FAQItem({
+  question,
+  answer,
+  index,
+}: {
+  question: string;
+  answer: string;
+  index: number;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay: index * 0.05 }}
+      className="border border-edge rounded-md overflow-hidden"
+    >
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between p-5 text-left hover:bg-surface/50 transition-colors"
+      >
+        <span className="text-base font-medium text-fg">{question}</span>
+        <ChevronDown
+          className={`w-5 h-5 text-fg-muted flex-shrink-0 ml-4 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      <div className={`px-5 pb-5 ${open ? "" : "hidden"}`}>
+        <p className="text-base text-fg-muted leading-relaxed">{answer}</p>
+      </div>
+    </motion.div>
+  );
+}
 
 export function SolutionContent({ solution }: { solution: SolutionPage }) {
   return (
@@ -51,6 +90,55 @@ export function SolutionContent({ solution }: { solution: SolutionPage }) {
         </div>
       </section>
 
+      {/* The Problem */}
+      {solution.problem && (
+        <section className="py-20 border-t border-edge/50">
+          <div className="container mx-auto px-4 max-w-3xl">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <h2 className="text-2xl md:text-3xl font-bold mb-6 text-fg">
+                The problem
+              </h2>
+              <div className="space-y-4">
+                {solution.problem.split("\n\n").map((paragraph, i) => (
+                  <p
+                    key={i}
+                    className="text-base text-fg-secondary leading-relaxed"
+                  >
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        </section>
+      )}
+
+      {/* Workflow Diagram */}
+      {solution.workflowDiagram && (
+        <section className="py-20 border-t border-edge/50">
+          <div className="container mx-auto px-4 max-w-3xl">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <h2 className="text-2xl md:text-3xl font-bold mb-6 text-fg">
+                How it works
+              </h2>
+              <div className="rounded-md border border-edge bg-surface/30 p-6">
+                <pre className="text-sm text-fg-secondary leading-relaxed whitespace-pre-wrap font-mono">
+                  {solution.workflowDiagram}
+                </pre>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+      )}
+
       {/* Why Reader */}
       <section className="py-20 border-t border-edge/50">
         <div className="container mx-auto px-4 max-w-4xl">
@@ -83,6 +171,26 @@ export function SolutionContent({ solution }: { solution: SolutionPage }) {
           </div>
         </div>
       </section>
+
+      {/* Capability Guide */}
+      {solution.capabilityGuide && (
+        <section className="py-20 border-t border-edge/50">
+          <div className="container mx-auto px-4 max-w-3xl">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <h2 className="text-2xl md:text-3xl font-bold mb-6 text-fg">
+                Start with the right capability
+              </h2>
+              <p className="text-base text-fg-secondary leading-relaxed">
+                {solution.capabilityGuide}
+              </p>
+            </motion.div>
+          </div>
+        </section>
+      )}
 
       {/* What you can extract + Code example */}
       <section className="py-20 border-t border-edge/50">
@@ -135,6 +243,35 @@ export function SolutionContent({ solution }: { solution: SolutionPage }) {
           )}
         </div>
       </section>
+
+      {/* FAQ */}
+      {solution.faqs && solution.faqs.length > 0 && (
+        <section className="py-20 border-t border-edge/50">
+          <div className="container mx-auto px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="text-center mb-12"
+            >
+              <h2 className="text-2xl md:text-3xl font-bold mb-4 text-fg">
+                Frequently asked questions
+              </h2>
+            </motion.div>
+
+            <div className="max-w-2xl mx-auto space-y-3">
+              {solution.faqs.map((faq, index) => (
+                <FAQItem
+                  key={faq.question}
+                  question={faq.question}
+                  answer={faq.answer}
+                  index={index}
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Bottom CTA */}
       <section className="py-20 border-t border-edge/50">

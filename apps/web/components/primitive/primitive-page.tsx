@@ -61,11 +61,9 @@ function FAQItem({
           }`}
         />
       </button>
-      {open && (
-        <div className="px-5 pb-5">
-          <p className="text-base text-fg-muted leading-relaxed">{answer}</p>
-        </div>
-      )}
+      <div className={`px-5 pb-5 ${open ? "" : "hidden"}`}>
+        <p className="text-base text-fg-muted leading-relaxed">{answer}</p>
+      </div>
     </motion.div>
   );
 }

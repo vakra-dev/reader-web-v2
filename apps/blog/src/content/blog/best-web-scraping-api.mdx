@@ -31,7 +31,7 @@ Traditional scraping tools were built to extract HTML and let you parse it yours
 
 **Markdown output.** Raw HTML wastes tokens on markup, navigation elements, scripts, and styles that have nothing to do with the actual content. Clean markdown preserves document structure (headings, paragraphs, lists, tables) while stripping everything else. This reduces token consumption significantly and improves comprehension in LLM pipelines.
 
-**Structured extraction.** For many AI applications, you do not want the full page content. You want specific fields: product name, price, description, availability. The best tools let you define a schema (JSON Schema, Pydantic, or natural language) and return typed, validated JSON.
+**Structured extraction.** For many AI applications, you do not want the full page content. You want specific fields: product name, price, description, availability. The best tools let you define a schema (JSON Schema, Pydantic, or natural language) and return typed, validated JSON. Reader's [extract](/extract) primitive handles this natively.
 
 **JavaScript rendering.** Over 80% of modern web applications are built with frameworks like React, Vue, and Next.js. The content does not exist in the initial HTML response. It loads dynamically through JavaScript execution. A scraping API that only fetches raw HTML misses most of the modern web.
 
@@ -64,11 +64,11 @@ Important caveats: benchmark results are point-in-time and vary by target site. 
 
 [Reader](https://reader.dev) is an open source web infrastructure platform (Apache 2.0) with three core primitives designed for AI workloads.
 
-**Read** scrapes any URL and returns clean, LLM-ready markdown by default. The conversion is handled by [Supermarkdown](https://supermarkdown.dev), a Rust engine that processes pages in under 5 milliseconds via single-pass O(n) DOM traversal. This is 10 to 50 times faster than JavaScript-based converters. The speed difference matters at scale: when you are processing thousands of pages for a RAG pipeline, conversion throughput becomes a bottleneck.
+[**Read**](/scrape) scrapes any URL and returns clean, LLM-ready markdown by default. The conversion is handled by [Supermarkdown](https://supermarkdown.dev), a Rust engine that processes pages in under 5 milliseconds via single-pass O(n) DOM traversal. This is 10 to 50 times faster than JavaScript-based converters. The speed difference matters at scale: when you are processing thousands of pages for a RAG pipeline, conversion throughput becomes a bottleneck.
 
-**Crawl** extends reading across entire domains with configurable depth, URL pattern filtering, and deduplication. The output is structured and ready for bulk ingestion into vector databases or LLM training pipelines.
+[**Crawl**](/crawl) extends reading across entire domains with configurable depth, URL pattern filtering, and deduplication. The output is structured and ready for bulk ingestion into vector databases or LLM training pipelines.
 
-**Browse** gives you full cloud browser sessions with CDP compatibility. Your Playwright and Puppeteer scripts connect directly. This is the primitive that turns Reader from a scraping tool into a web infrastructure platform: your agent can log into portals, navigate authenticated dashboards, fill forms, and interact with the web through a real browser.
+[**Browse**](/browser) gives you full cloud browser sessions with CDP compatibility. Your Playwright and Puppeteer scripts connect directly. This is the primitive that turns Reader from a scraping tool into a web infrastructure platform: your agent can log into portals, navigate authenticated dashboards, fill forms, and interact with the web through a real browser.
 
 ```python
 from reader_py import ReaderClient

@@ -260,7 +260,7 @@ For maximum edge case handling on local files, use Pandoc.
 
 For ambiguous or inconsistent page structures, use ReaderLM v2.
 
-For the full end to end pipeline (fetch, render JavaScript, extract content, convert to markdown), use Reader. It handles all of these steps in a single API call with Supermarkdown running under the hood.
+For the full end to end pipeline (fetch, render JavaScript, extract content, convert to markdown), use Reader's [scrape API](/scrape). It handles all of these steps in a single API call with Supermarkdown running under the hood.
 
 ```bash
 curl -X POST https://api.reader.dev/v1/read \
@@ -269,7 +269,7 @@ curl -X POST https://api.reader.dev/v1/read \
   -d '{"url": "https://example.com"}'
 ```
 
-You can also try the free markdown converter at [reader.dev/markdown](https://reader.dev/markdown) to see the output quality instantly without an API key. Reader offers 1,000 free pages per month at [reader.dev](https://reader.dev).
+You can also try the free [markdown converter](/markdown) to see the output quality instantly without an API key. Reader offers 1,000 free pages per month at [reader.dev](https://reader.dev).
 
 ## Conclusion
 

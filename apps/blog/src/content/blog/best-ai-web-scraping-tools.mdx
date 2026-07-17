@@ -43,11 +43,11 @@ Before evaluating tools, it helps to define the requirements. AI scraping worklo
 
 [reader.dev](https://reader.dev) · [GitHub](https://github.com/vakra-dev/reader)
 
-Reader is a cloud web infrastructure platform with an open source core under the Apache 2.0 license. It provides three primitives (Scrape, Crawl, Browser) through a single API endpoint.
+Reader is a cloud web infrastructure platform with an open source core under the Apache 2.0 license. It provides three primitives ([Scrape](/scrape), [Crawl](/crawl), Browser) through a single API endpoint.
 
 **Markdown output.** Reader returns clean markdown by default, processed through [Supermarkdown](/blog/introducing-supermarkdown-rust-html-markdown), a Rust HTML to markdown engine built specifically for web scraping. Supermarkdown uses html5ever (the Firefox HTML parser) for malformed HTML recovery and performs single pass O(n) conversion.
 
-**Structured extraction.** The extract capability accepts a JSON schema or natural language prompt and returns validated JSON. Missing fields return null rather than hallucinated values.
+**Structured extraction.** The [extract](/extract) capability accepts a JSON schema or natural language prompt and returns validated JSON. Missing fields return null rather than hallucinated values.
 
 **Browser automation.** Full CDP browser sessions compatible with Playwright and Puppeteer. Sessions include stealth features (browser fingerprint generation, identity randomization, and proxy rotation) built on Playwright with fingerprint-generator. Sessions persist for up to 60 minutes for multi step workflows.
 
@@ -253,7 +253,7 @@ The right tool depends on your primary use case. Most teams use one or two tools
 
 **Building RAG pipelines with web data.** You need clean markdown and crawling. Reader (unified API, Rust markdown engine, [crawling built in](/blog/crawl-website-to-markdown-one-command)), Firecrawl (largest ecosystem, crawl + map endpoints), or Crawl4AI (free, local, Apache 2.0) are the strongest fits. All three produce markdown that [chunks well](/blog/building-rag-pipeline-live-web-data) for embedding and retrieval.
 
-**Giving AI agents web access.** You need MCP support and browser sessions. Reader (9 MCP tools + CDP sessions), Firecrawl (12 MCP tools + agent endpoint), Browserbase (Stagehand AI SDK), or Bright Data (60+ MCP tools) cover different angles. Reader and Firecrawl are the most complete for scrape + browse in one tool. Browserbase is the best for pure browser agent workflows.
+**[Giving AI agents web access.](/solutions/ai-agents)** You need MCP support and browser sessions. Reader (9 MCP tools + CDP sessions), Firecrawl (12 MCP tools + agent endpoint), Browserbase (Stagehand AI SDK), or Bright Data (60+ MCP tools) cover different angles. Reader and Firecrawl are the most complete for scrape + browse in one tool. Browserbase is the best for pure browser agent workflows.
 
 **Scraping heavily protected sites.** You need deep [anti bot bypass](/blog/anti-bot-detection). ZenRows (specializes in anti bot, 55M+ residential IPs), Bright Data (400M+ IPs, Web Unlocker), or Reader (Playwright with fingerprint-generator stealth + proxy rotation) handle the hardest targets. For the most aggressive sites ([Cloudflare](/blog/bypass-cloudflare) with high sensitivity, DataDome, Akamai), ZenRows and Bright Data have the deepest proxy infrastructure.
 

@@ -1,7 +1,45 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import type { ComparisonPage } from "../data";
+
+function FaqItem({
+  question,
+  answer,
+}: {
+  question: string;
+  answer: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="border-b border-edge/50 last:border-b-0">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between py-4 text-left"
+      >
+        <span className="text-sm font-medium text-fg pr-4">{question}</span>
+        <svg
+          className={`w-4 h-4 text-fg-muted flex-shrink-0 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      <div className={`pb-4 ${open ? "" : "hidden"}`}>
+        <p className="text-sm text-fg-muted leading-relaxed">{answer}</p>
+      </div>
+    </div>
+  );
+}
 
 export function ComparisonContent({
   comparison,
@@ -27,6 +65,27 @@ export function ComparisonContent({
           </motion.div>
         </div>
       </section>
+
+      {/* Quick Verdict */}
+      {comparison.verdict && (
+        <section className="pb-16">
+          <div className="container mx-auto px-4 max-w-3xl">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="p-6 border border-accent-500/20 rounded-md bg-accent-500/5"
+            >
+              <h2 className="text-lg font-semibold mb-3 text-fg">
+                Quick verdict
+              </h2>
+              <p className="text-sm text-fg-muted leading-relaxed">
+                {comparison.verdict}
+              </p>
+            </motion.div>
+          </div>
+        </section>
+      )}
 
       {/* Comparison Table */}
       <section className="pb-20">
@@ -151,6 +210,36 @@ export function ComparisonContent({
           </div>
         </div>
       </section>
+
+      {/* FAQ */}
+      {comparison.faqs && comparison.faqs.length > 0 && (
+        <section className="py-20 border-t border-edge/50">
+          <div className="container mx-auto px-4 max-w-3xl">
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="text-2xl font-bold mb-6 text-fg"
+            >
+              Frequently asked questions
+            </motion.h2>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="border border-edge rounded-md divide-y-0 px-4"
+            >
+              {comparison.faqs.map((faq) => (
+                <FaqItem
+                  key={faq.question}
+                  question={faq.question}
+                  answer={faq.answer}
+                />
+              ))}
+            </motion.div>
+          </div>
+        </section>
+      )}
 
       {/* CTA */}
       <section className="py-20 border-t border-edge/50">

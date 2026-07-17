@@ -23,7 +23,7 @@ faq:
 
 Supermarkdown is an HTML to markdown conversion engine built from scratch in Rust. It converts HTML to GitHub Flavored Markdown in a single pass with browser grade error recovery, and it is designed specifically for web scraping and LLM pipelines where speed and accuracy both matter.
 
-Available as a Rust crate, npm package (via napi-rs native bindings), and CLI tool. MIT licensed, open source at [supermarkdown.dev](https://supermarkdown.dev).
+Available as a Rust crate, npm package (via napi-rs native bindings), and CLI tool. MIT licensed, [open source](/open-source) at [supermarkdown.dev](https://supermarkdown.dev).
 
 ## Why We Built It
 
@@ -164,7 +164,7 @@ The CLI supports stdin piping, making it composable with other command line tool
 
 ## How Reader Uses Supermarkdown
 
-Reader's scraping pipeline works in stages: fetch the page with a headless browser, render JavaScript, run content extraction, and convert with Supermarkdown. The `excludeSelectors` and `includeSelectors` options are configured during conversion to strip navigation, ads, and boilerplate in the same pass as the structural conversion.
+Reader's [scraping](/scrape) pipeline works in stages: fetch the page with a headless browser, render JavaScript, run content extraction, and convert with Supermarkdown. The `excludeSelectors` and `includeSelectors` options are configured during conversion to strip navigation, ads, and boilerplate in the same pass as the structural conversion.
 
 Reader's README describes the relationship: "Reader uses supermarkdown for HTML to Markdown conversion, a sister project we built from scratch specifically for web scraping and LLM pipelines."
 
@@ -172,6 +172,6 @@ Supermarkdown is a standalone library with no dependency on Reader. You can use 
 
 ## Conclusion
 
-Supermarkdown exists because web scraping at scale demands a converter that is both fast and robust. The combination of Rust performance, html5ever parsing, single pass conversion, and CSS selector filtering produces clean GFM output from arbitrary web HTML without crashes, garbled output, or unpredictable latency.
+Supermarkdown exists because web scraping at scale demands a converter that is both fast and robust. You can try it instantly with the free [markdown converter](/markdown). The combination of Rust performance, html5ever parsing, single pass conversion, and CSS selector filtering produces clean GFM output from arbitrary web HTML without crashes, garbled output, or unpredictable latency.
 
 It is MIT licensed, available as a Rust crate and npm package, and open source at [supermarkdown.dev](https://supermarkdown.dev). Source code is on [GitHub](https://github.com/vakra-dev/supermarkdown).

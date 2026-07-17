@@ -16,6 +16,23 @@
 
     <!-- Desktop nav -->
     <nav class="hidden md:flex items-center gap-1">
+      <!-- Product dropdown -->
+      <div class="relative" data-dropdown="product">
+        <button
+          class="px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900 transition-colors flex items-center gap-1"
+          data-dropdown-trigger
+        >
+          Product
+          <svg class="w-3.5 h-3.5 transition-transform duration-150" data-dropdown-chevron viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="absolute top-full left-0 mt-1 w-52 py-2 bg-white border border-neutral-200 rounded-md shadow-lg z-50 hidden" data-dropdown-menu>
+          <a href="/scrape" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">Scrape</a>
+          <a href="/crawl" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">Crawl</a>
+          <a href="/browser" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">Browser</a>
+          <a href="/extract" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">Extract</a>
+        </div>
+      </div>
+
       <!-- Solutions dropdown -->
       <div class="relative" data-dropdown="solutions">
         <button
@@ -28,12 +45,12 @@
         <div class="absolute top-full left-0 mt-1 w-52 py-2 bg-white border border-neutral-200 rounded-md shadow-lg z-50 hidden" data-dropdown-menu>
           <a href="/solutions/ecommerce" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">E-commerce</a>
           <a href="/solutions/real-estate" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">Real Estate</a>
-          <a href="/solutions/lead-generation" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">Lead Generation</a>
+          <a href="/solutions/lead-research" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">Lead Research</a>
           <a href="/solutions/price-monitoring" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">Price Monitoring</a>
           <a href="/solutions/competitive-intelligence" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">Competitive Intelligence</a>
           <a href="/solutions/rag-pipelines" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">RAG Pipelines</a>
           <a href="/solutions/ai-agents" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">AI Agents</a>
-          <a href="/solutions/llm-training-data" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">LLM Training Data</a>
+          <a href="/solutions/llm-dataset-collection" class="block px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors">LLM Dataset Collection</a>
         </div>
       </div>
 
@@ -118,15 +135,21 @@
   <!-- Mobile menu -->
   <div id="mobile-menu" class="md:hidden border-t border-neutral-200 bg-white max-h-[80vh] overflow-y-auto hidden">
     <div class="max-w-6xl mx-auto px-6 py-4 flex flex-col gap-1">
+      <div class="px-3 py-1.5"><span class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Product</span></div>
+      <a href="/scrape" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">Scrape</a>
+      <a href="/crawl" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">Crawl</a>
+      <a href="/browser" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">Browser</a>
+      <a href="/extract" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">Extract</a>
+      <div class="my-1 border-t border-neutral-100"></div>
       <div class="px-3 py-1.5"><span class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Solutions</span></div>
       <a href="/solutions/ecommerce" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">E-commerce</a>
       <a href="/solutions/real-estate" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">Real Estate</a>
-      <a href="/solutions/lead-generation" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">Lead Generation</a>
+      <a href="/solutions/lead-research" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">Lead Research</a>
       <a href="/solutions/price-monitoring" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">Price Monitoring</a>
       <a href="/solutions/competitive-intelligence" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">Competitive Intelligence</a>
       <a href="/solutions/rag-pipelines" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">RAG Pipelines</a>
       <a href="/solutions/ai-agents" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">AI Agents</a>
-      <a href="/solutions/llm-training-data" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">LLM Training Data</a>
+      <a href="/solutions/llm-dataset-collection" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">LLM Dataset Collection</a>
       <div class="my-1 border-t border-neutral-100"></div>
       <div class="px-3 py-1.5"><span class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Compare</span></div>
       <a href="/compare/firecrawl" class="pl-6 px-3 py-1.5 text-sm text-neutral-600 hover:text-neutral-900">vs Firecrawl</a>

@@ -21,13 +21,13 @@ faq:
     answer: "Yes. The crawler checks robots.txt before scraping each URL and skips pages that are disallowed."
 ---
 
-Sometimes you need every page on a website as clean markdown. A documentation site for your RAG pipeline. A competitor's marketing site for analysis. Your own site for content migration. Reader's crawl primitive handles this in one command or one API call: set the URL, configure depth and page limits, and get back clean markdown for every discovered page.
+Sometimes you need every page on a website as clean markdown. A documentation site for your RAG pipeline. A competitor's marketing site for analysis. Your own site for content migration. Reader's [crawl](/crawl) primitive handles this in one command or one API call: set the URL, configure depth and page limits, and get back clean markdown for every discovered page.
 
 ## How Reader Crawl Works
 
 Reader's crawler uses breadth first search (BFS) to discover pages starting from a seed URL. It fetches the seed page, extracts all links from the DOM, filters them (same domain only, not yet visited, matches include patterns, does not match exclude patterns, allowed by robots.txt), and adds them to the queue at depth plus one.
 
-The crawler processes the queue level by level, stopping when the queue is empty, the maximum depth is reached, or the maximum page count is hit. Every discovered page is scraped and converted to clean markdown through Supermarkdown.
+The crawler processes the queue level by level, stopping when the queue is empty, the maximum depth is reached, or the maximum page count is hit. Every discovered page is [scraped](/scrape) and converted to clean markdown through Supermarkdown.
 
 Key behaviors: the crawler stays on the same domain and never follows links to external sites. Deduplication prevents scraping the same URL twice. A configurable delay between requests respects the target server's capacity. Robots.txt is respected by default.
 
@@ -113,7 +113,7 @@ The JavaScript SDK (`@vakra-dev/reader-js`, v0.2.0) follows the same pattern as 
 
 ### Documentation Indexing
 
-Crawl a documentation site and save every page as markdown for a RAG pipeline or search index.
+Crawl a documentation site and save every page as markdown for a [RAG pipeline](/solutions/rag-pipelines) or search index.
 
 ```python
 result = client.read(

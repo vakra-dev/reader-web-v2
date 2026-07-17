@@ -1,44 +1,44 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Cloud, CreditCard, Code2, Monitor, Cpu, Package } from "lucide-react";
+import { Brain, Box, FileOutput, Repeat, Settings2, Cloud } from "lucide-react";
 
 const valueProps = [
+  {
+    icon: Brain,
+    title: "It is built around agent context",
+    description:
+      "Reader is designed for workflows where web content becomes model context, structured data, crawl results, or browser controlled state.",
+  },
+  {
+    icon: Box,
+    title: "It keeps the product model simple",
+    description:
+      "Scrape pages, crawl websites, extract structured data, and open browser sessions without stitching together separate services.",
+  },
+  {
+    icon: FileOutput,
+    title: "It returns useful outputs",
+    description:
+      "Get Markdown for models, JSON for applications, metadata for storage, HTML for inspection, and browser sessions for interactive workflows.",
+  },
+  {
+    icon: Repeat,
+    title: "It works across use cases",
+    description:
+      "Use the same platform for agent research, RAG ingestion, product data, price monitoring, competitive intelligence, lead research, and website analysis.",
+  },
+  {
+    icon: Settings2,
+    title: "It gives developers control",
+    description:
+      "Use the API, SDKs, CLI, MCP server, Playwright, Puppeteer, webhooks, and your own storage or agent framework.",
+  },
   {
     icon: Cloud,
     title: "No infrastructure to manage",
     description:
-      "No proxies to rotate, no browsers to run, no servers to scale. Reader handles the complexity. You get clean data.",
-  },
-  {
-    icon: CreditCard,
-    title: "One API, one credit pool",
-    description:
-      "Read, crawl, browse, extract. All through one API key, one credit pool. No separate billing tracks, no hidden multipliers. One credit per page. Simple and predictable.",
-  },
-  {
-    icon: Code2,
-    title: "Open source at the core",
-    description:
-      "Reader is open source and Apache 2.0 licensed. Run it on your infrastructure, inspect every line, contribute back. The managed platform builds on this foundation.",
-  },
-  {
-    icon: Monitor,
-    title: "Browser automation included",
-    description:
-      "Full Playwright and Puppeteer compatibility via CDP. Spin up cloud browsers, connect your existing scripts, automate authenticated workflows. No new APIs to learn.",
-  },
-  {
-    icon: Cpu,
-    title: "Built for the AI era",
-    description:
-      "Every output is optimized for LLMs. Clean markdown, structured data, no boilerplate. Whether you're feeding a model or reading it yourself, the content is ready.",
-  },
-  {
-    icon: Package,
-    title: "SDKs for every stack",
-    description:
-      "JavaScript and Python SDKs, a REST API, and a CLI. Pick the interface that fits your workflow and start building in minutes.",
+      "No browsers to run, no proxies to rotate, no servers to scale. Reader handles rendering, anti-bot bypass, and content extraction so your team builds the product, not the plumbing.",
   },
 ];
 
@@ -67,7 +67,7 @@ export function WhyReader() {
           className="text-center mb-16"
         >
           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-fg">
-            Why Reader
+            Why teams choose Reader
           </h2>
         </motion.div>
 

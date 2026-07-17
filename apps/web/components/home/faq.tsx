@@ -8,37 +8,52 @@ const faqs = [
   {
     question: "What is Reader?",
     answer:
-      "Reader is a cloud web infrastructure platform for AI. It scrapes, crawls, and automates the web through a single API, returning clean markdown optimized for LLMs, RAG pipelines, and AI agents. The core engine is open source under the Apache 2.0 license.",
+      "Reader is the web context API for AI agents. It turns URLs into clean Markdown, structured JSON, crawl results, and browser sessions.",
   },
   {
-    question: "Does Reader render JavaScript?",
+    question: "What is a web context API?",
     answer:
-      "Yes. Reader uses a headless browser to render JavaScript automatically. Single page applications built with React, Vue, Next.js, Angular, and other frameworks are handled without any additional configuration.",
+      "A web context API helps your system collect usable context from the web. That context can be Markdown, metadata, structured JSON, crawl results, or browser controlled page state.",
   },
   {
-    question: "Does Reader bypass anti-bot protection?",
+    question: "Is Reader a web scraping API?",
     answer:
-      "Reader includes anti-bot handling through browser fingerprint generation, identity randomization, and proxy rotation. The stealth stack is built on Playwright with fingerprint-generator and handles common protection systems including Cloudflare.",
+      "Yes. Reader can scrape web pages and return clean content your application can use. It also supports crawling, structured extraction, and browser sessions.",
   },
   {
-    question: "Can I self host Reader?",
+    question: "Does Reader return Markdown?",
     answer:
-      "Yes. The entire engine is open source under Apache 2.0 on GitHub. Clone the repository and deploy on your own infrastructure. There are no feature gaps between the open source and managed versions.",
+      "Yes. Reader can turn web pages into clean Markdown for agents, RAG pipelines, search, summarization, and internal data workflows.",
   },
   {
-    question: "Does Reader have an MCP server?",
+    question: "Can Reader crawl a website?",
     answer:
-      "Reader's MCP server exposes 9 tools for AI coding assistants. Install it in Claude Code, Cursor, VS Code, Windsurf, or any MCP compatible tool to give your AI agent web scraping, crawling, and browser automation capabilities.",
+      "Yes. Reader can crawl from a starting URL and collect pages based on the limits, depth, and URL filters you set.",
   },
   {
-    question: "What output formats does Reader support?",
+    question: "Can Reader extract structured data?",
     answer:
-      "Reader returns clean markdown by default, optimized for LLM consumption. HTML and structured JSON (via the extract capability) are also available.",
+      "Yes. Reader can extract structured JSON using a schema or instruction, then return that output with the page context.",
   },
   {
-    question: "Does Reader have a CLI?",
+    question: "Does Reader work with AI agents?",
     answer:
-      "Yes. The Reader CLI lets you scrape and crawl from your terminal. Install it globally with npm (npm install -g @vakra-dev/reader-cli) and run commands like reader scrape and reader crawl. Supports extract schemas, output formatting, and all the same features as the API.",
+      "Yes. Reader is designed for agent workflows that need to read pages, crawl websites, extract fields, and use browser sessions when interaction is required.",
+  },
+  {
+    question: "Does Reader support browser automation?",
+    answer:
+      "Yes. Reader can create browser sessions that work with automation tools such as Playwright and Puppeteer.",
+  },
+  {
+    question: "When should I use Browser instead of Scrape?",
+    answer:
+      "Use Browser when a page requires interaction, such as clicks, forms, navigation, screenshots, PDFs, or browser state. Use Scrape when you only need page content from a URL.",
+  },
+  {
+    question: "Is Reader only for AI agents?",
+    answer:
+      "No. Reader is optimized for AI agents, but it is also useful for RAG pipelines, data workflows, research tools, monitoring systems, and products that need clean web content.",
   },
 ];
 
@@ -72,14 +87,11 @@ function FAQItem({
           }`}
         />
       </button>
-      {open && (
-        <div className="px-5 pb-5">
-          <p
-            className="text-base text-fg-muted leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: answer }}
-          />
+      <div className={`px-5 pb-5 ${open ? "" : "hidden"}`}>
+          <p className="text-base text-fg-muted leading-relaxed">
+            {answer}
+          </p>
         </div>
-      )}
     </motion.div>
   );
 }

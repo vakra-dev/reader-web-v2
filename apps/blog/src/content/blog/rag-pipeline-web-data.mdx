@@ -23,7 +23,7 @@ faq:
 
 Most RAG tutorials use static PDFs or text files as their data source. But the most valuable information is live on the web: documentation that updates weekly, competitor pages that change daily, news that breaks hourly. A RAG pipeline built on static documents goes stale the moment it is deployed.
 
-This guide shows how to build a RAG pipeline that ingests live web data, from scraping through embedding to retrieval, using Reader for web access and LangChain for the pipeline.
+This guide shows how to build a [RAG pipeline](/solutions/rag-pipelines) that ingests live web data, from scraping through embedding to retrieval, using Reader for web access and LangChain for the pipeline.
 
 ## The Architecture
 
@@ -72,7 +72,7 @@ for url in urls:
 
 ### Full Site Crawl
 
-When you want to index an entire documentation site or knowledge base:
+When you want to index an entire documentation site or knowledge base, use [crawl](/crawl):
 
 ```python
 result = client.read(
@@ -298,4 +298,4 @@ Reader offers 1,000 free pages per month at [reader.dev](https://reader.dev). Fu
 
 Building a RAG pipeline with live web data follows the same scrape, chunk, embed, store, retrieve pattern as any RAG pipeline. The difference is the data source: instead of static files, you are working with live web content that Reader scrapes and converts to clean markdown automatically.
 
-Clean markdown from Reader chunks better than raw HTML because structural markers (headings, lists) are explicit and noise (navigation, scripts, ads) is already removed. This improves both chunk quality and retrieval accuracy throughout the pipeline.
+Clean markdown from Reader chunks better than raw HTML because structural markers (headings, lists) are explicit and noise (navigation, scripts, ads) is already removed. For pages where you need specific fields rather than full content, Reader's [extract](/extract) capability returns structured JSON that reduces tokens even further. This improves both chunk quality and retrieval accuracy throughout the pipeline.

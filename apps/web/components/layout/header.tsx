@@ -4,15 +4,22 @@ import Image from "next/image";
 import { Github, Menu, X, ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
+const productLinks = [
+  { label: "Scrape", href: "/scrape" },
+  { label: "Crawl", href: "/crawl" },
+  { label: "Browser", href: "/browser" },
+  { label: "Extract", href: "/extract" },
+];
+
 const solutionLinks = [
   { label: "E-commerce", href: "/solutions/ecommerce" },
   { label: "Real Estate", href: "/solutions/real-estate" },
-  { label: "Lead Generation", href: "/solutions/lead-generation" },
+  { label: "Lead Research", href: "/solutions/lead-research" },
   { label: "Price Monitoring", href: "/solutions/price-monitoring" },
   { label: "Competitive Intelligence", href: "/solutions/competitive-intelligence" },
   { label: "RAG Pipelines", href: "/solutions/rag-pipelines" },
   { label: "AI Agents", href: "/solutions/ai-agents" },
-  { label: "LLM Training Data", href: "/solutions/llm-training-data" },
+  { label: "LLM Dataset Collection", href: "/solutions/llm-dataset-collection" },
 ];
 
 const compareLinks = [
@@ -22,6 +29,7 @@ const compareLinks = [
   { label: "vs Browserbase", href: "/compare/browserbase" },
   { label: "vs Apify", href: "/compare/apify" },
   { label: "vs Bright Data", href: "/compare/bright-data" },
+  { label: "vs Zyte", href: "/compare/zyte" },
 ];
 
 const resourceLinks = [
@@ -79,6 +87,7 @@ function Dropdown({
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const productRef = useRef<HTMLDivElement>(null);
   const solutionsRef = useRef<HTMLDivElement>(null);
   const compareRef = useRef<HTMLDivElement>(null);
   const resourcesRef = useRef<HTMLDivElement>(null);
@@ -90,6 +99,8 @@ export function Header() {
     function handleClickOutside(e: MouseEvent) {
       const target = e.target as Node;
       if (
+        productRef.current &&
+        !productRef.current.contains(target) &&
         solutionsRef.current &&
         !solutionsRef.current.contains(target) &&
         compareRef.current &&
@@ -123,6 +134,13 @@ export function Header() {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1">
+          <Dropdown
+            label="Product"
+            links={productLinks}
+            open={openDropdown === "product"}
+            onToggle={() => toggleDropdown("product")}
+            dropdownRef={productRef}
+          />
           <Dropdown
             label="Solutions"
             links={solutionLinks}
@@ -192,6 +210,24 @@ export function Header() {
       {mobileOpen && (
         <div className="md:hidden border-t border-edge/50 bg-page max-h-[80vh] overflow-y-auto">
           <div className="container mx-auto px-4 py-4 flex flex-col gap-1">
+            {/* Product */}
+            <div className="px-3 py-1.5">
+              <span className="text-xs font-semibold text-fg-tertiary uppercase tracking-wider">
+                Product
+              </span>
+            </div>
+            {productLinks.map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                className="pl-6 px-3 py-1.5 text-sm text-fg-muted hover:text-fg-secondary transition-colors"
+              >
+                {link.label}
+              </a>
+            ))}
+
+            <div className="my-1 border-t border-edge/50" />
+
             {/* Solutions */}
             <div className="px-3 py-1.5">
               <span className="text-xs font-semibold text-fg-tertiary uppercase tracking-wider">

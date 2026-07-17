@@ -7,8 +7,22 @@ import { SolutionContent } from "./solution-content";
 
 type Params = { slug: string };
 
+// Slugs that have dedicated page directories and should not be generated here
+const dedicatedPages = new Set([
+  "ecommerce",
+  "real-estate",
+  "lead-research",
+  "price-monitoring",
+  "competitive-intelligence",
+  "rag-pipelines",
+  "ai-agents",
+  "llm-dataset-collection",
+]);
+
 export function generateStaticParams() {
-  return solutions.map((s) => ({ slug: s.slug }));
+  return solutions
+    .filter((s) => !dedicatedPages.has(s.slug))
+    .map((s) => ({ slug: s.slug }));
 }
 
 export async function generateMetadata({

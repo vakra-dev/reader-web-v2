@@ -1,34 +1,37 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Code2, BarChart3, Search } from "lucide-react";
 
-const personas = [
+const useCases = [
   {
-    icon: Code2,
-    title: "For developers building AI apps",
-    body: "Your agents need live web data, not stale training sets. Reader gives you clean markdown and browser sessions from any URL. One API key, one credit pool, four primitives.",
-    detail:
-      "Plug Reader into your RAG pipelines, agent workflows, or any LLM-powered app. Connect with Playwright or Puppeteer for browser automation. SDKs for JavaScript and Python. Self-host the open source core or use the managed platform.",
-    quote: "Stop writing scrapers. Start shipping features.",
-    color: "text-emerald-500",
+    title: "Agent research",
+    description:
+      "Let an agent read public websites, crawl related pages, extract structured fields, and summarize findings with source context.",
   },
   {
-    icon: BarChart3,
-    title: "For enterprise teams automating workflows",
-    body: "Insurance quoting, vendor portal monitoring, competitive intelligence, compliance checks. Reader handles the browser automation so your team doesn't build scraping infrastructure from scratch.",
-    detail:
-      "Authenticated sessions persist across runs. Proxy rotation and anti-bot bypass included. Schedule jobs, monitor changes, export structured data to your existing tools.",
-    quote: "Automate what your team does manually on the web, at scale.",
-    color: "text-blue-500",
+    title: "RAG ingestion",
+    description:
+      "Convert documentation, blogs, help centers, and public websites into clean Markdown for chunking, embedding, retrieval, and answer generation.",
   },
   {
-    icon: Search,
-    title: "For researchers and analysts",
-    body: "Crawl entire domains, scrape hundreds of pages, and get structured output ready for spreadsheets, notebooks, or your BI tools. No scraping expertise needed. No engineering tickets required.",
-    detail: "Monitor sources across the web, build datasets for reports, or track changes over time. Reader handles the infrastructure so you can focus on the analysis.",
-    quote: "From URL to dataset, without the detours.",
-    color: "text-violet-500",
+    title: "Product data workflows",
+    description:
+      "Collect product names, prices, availability, variants, reviews, and metadata from public product pages.",
+  },
+  {
+    title: "Price monitoring",
+    description:
+      "Retrieve product pages, extract price and availability fields, store snapshots, and compare changes in your own system.",
+  },
+  {
+    title: "Competitive intelligence",
+    description:
+      "Crawl public competitor pages and feed clean content into your own change detection, summarization, and alerting workflows.",
+  },
+  {
+    title: "Lead research",
+    description:
+      "Collect public company descriptions, product pages, location information, contact page links, hiring signals, and website content for research workflows.",
   },
 ];
 
@@ -43,44 +46,26 @@ export function WhoItsFor() {
           className="text-center mb-16"
         >
           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-fg">
-            Built for teams that need the web to work for them
+            Built for real agent workflows
           </h2>
-          <p className="text-lg text-fg-muted max-w-xl mx-auto">
-            Developers, enterprise teams, and researchers. Reader speaks your language.
-          </p>
         </motion.div>
 
         <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-          {personas.map((persona, index) => (
+          {useCases.map((useCase, index) => (
             <motion.div
-              key={persona.title}
+              key={useCase.title}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: index * 0.1 }}
-              className="group border border-edge rounded-md overflow-hidden bg-surface/30 hover:border-edge-hover transition-colors flex flex-col"
+              className="group border border-edge rounded-md overflow-hidden bg-surface/30 hover:border-edge-hover transition-colors p-6"
             >
-              <div className="p-6 flex-1">
-                <div className="flex items-center gap-3 mb-3">
-                  <persona.icon className={`w-5 h-5 ${persona.color}`} />
-                  <h3 className="text-base font-semibold text-fg">
-                    {persona.title}
-                  </h3>
-                </div>
-                <p className="text-base text-fg-secondary leading-relaxed mb-3">
-                  {persona.body}
-                </p>
-                {persona.detail && (
-                  <p className="text-base text-fg-tertiary leading-relaxed">
-                    {persona.detail}
-                  </p>
-                )}
-              </div>
-              <div className="border-t border-edge bg-surface/50 px-6 py-4">
-                <p className="text-sm text-fg-tertiary italic">
-                  &ldquo;{persona.quote}&rdquo;
-                </p>
-              </div>
+              <h3 className="text-base font-semibold text-fg mb-2">
+                {useCase.title}
+              </h3>
+              <p className="text-base text-fg-muted leading-relaxed">
+                {useCase.description}
+              </p>
             </motion.div>
           ))}
         </div>

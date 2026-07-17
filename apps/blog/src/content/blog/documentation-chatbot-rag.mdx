@@ -19,7 +19,7 @@ faq:
 
 Documentation sites have a search problem. Users type a question, get a list of page titles, and have to read through multiple pages to find their answer. A documentation chatbot solves this by reading all the docs, understanding the content, and answering questions directly with citations to the source pages.
 
-Building a documentation chatbot requires three components: a way to crawl and clean the documentation content, a way to store and retrieve relevant sections when a question arrives, and a language model to synthesize the retrieved content into an answer. This is retrieval augmented generation (RAG), and this guide walks through building it end to end with Reader for crawling, a vector database for retrieval, and Claude for generation.
+Building a documentation chatbot requires three components: a way to crawl and clean the documentation content, a way to store and retrieve relevant sections when a question arrives, and a language model to synthesize the retrieved content into an answer. This is retrieval augmented generation ([RAG](/solutions/rag-pipelines)), and this guide walks through building it end to end with Reader for crawling, a vector database for retrieval, and Claude for generation.
 
 ## Architecture Overview
 
@@ -52,7 +52,7 @@ Send question + relevant chunks to LLM → Answer with citations
 
 ## Step 1: Crawl the Documentation
 
-Reader crawls the documentation site and returns clean markdown for every page. Markdown is ideal for RAG because it preserves document structure (headings, lists, tables, code blocks) while stripping navigation, scripts, and boilerplate that waste tokens.
+Reader [crawls](/crawl) the documentation site and returns clean markdown for every page. Markdown is ideal for RAG because it preserves document structure (headings, lists, tables, code blocks) while stripping navigation, scripts, and boilerplate that waste tokens.
 
 ```python
 from reader_py import ReaderClient
@@ -459,7 +459,7 @@ schedule.every().week.do(refresh_index)
 
 ### Incremental Updates
 
-For large documentation sites, re crawling everything weekly is expensive. Instead, crawl only pages that changed. Reader's crawl discovers all URLs. Compare the discovered URLs with the previous crawl to find new and updated pages (based on last modified headers or content hash comparison). Re embed only the changed pages.
+For large documentation sites, re crawling everything weekly is expensive. Instead, crawl only pages that changed. Reader's crawl discovers all URLs. Compare the discovered URLs with the previous crawl to find new and updated pages (based on last modified headers or content hash comparison). You can also use [extract](/extract) to pull structured fields from specific pages. Re embed only the changed pages.
 
 ## Deploying the Chatbot
 

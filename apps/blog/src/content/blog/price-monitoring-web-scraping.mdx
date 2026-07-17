@@ -17,7 +17,7 @@ faq:
     answer: "SQLite works for small to medium catalogs (under 10,000 products). PostgreSQL or MySQL for larger deployments. Time series databases (InfluxDB, TimescaleDB) are optimized for this workload if you need fast queries over millions of historical observations. For most teams starting out, SQLite is sufficient."
 ---
 
-Competitor prices change constantly. A manual check of 50 competitor product pages takes hours and is outdated by the time you finish. Automated price monitoring scrapes those pages on a schedule, detects changes, and alerts your team in real time. Retailers use it for dynamic pricing. Manufacturers use it to enforce MAP (minimum advertised price) compliance. Marketplaces use it to stay competitive. Travel companies use it to track fare movements.
+Competitor prices change constantly. A manual check of 50 competitor product pages takes hours and is outdated by the time you finish. Automated [price monitoring](/solutions/price-monitoring) scrapes those pages on a schedule, detects changes, and alerts your team in real time. Retailers use it for dynamic pricing. Manufacturers use it to enforce MAP (minimum advertised price) compliance. Marketplaces use it to stay competitive. Travel companies use it to track fare movements.
 
 This guide covers how to build a price monitoring pipeline: what data to extract, how to structure the scraping, change detection logic, scheduling, alerting, and how Reader simplifies the infrastructure.
 
@@ -95,7 +95,7 @@ The same product_id across different competitor URLs enables cross retailer pric
 
 ### Scraping Engine
 
-The engine visits each URL in the catalog, extracts price data, and stores the results with timestamps.
+The engine visits each URL in the catalog using [scrape](/scrape), extracts price data, and stores the results with timestamps.
 
 ```python
 from reader_py import ReaderClient
@@ -137,7 +137,7 @@ for entry in catalog:
               f"${price_data.get('current_price', 'N/A')}")
 ```
 
-Reader's extract capability pulls typed data from any product page. The schema defines the fields. Missing fields return null. No CSS selectors to maintain: the LLM understands the page structure and extracts the data regardless of layout.
+Reader's [extract](/extract) capability pulls typed data from any product page. The schema defines the fields. Missing fields return null. No CSS selectors to maintain: the LLM understands the page structure and extracts the data regardless of layout.
 
 This is the key advantage for price monitoring specifically. E-commerce sites change their page layouts frequently through A/B tests and redesigns. Selector based scrapers break when layouts change. Schema based extraction adapts because the LLM reads the content, not the selectors.
 
@@ -412,7 +412,7 @@ Historical data enables trend analysis (is this competitor gradually raising pri
 
 [E-commerce sites](/solutions/ecommerce) are among the most heavily protected targets on the web. [Amazon](/blog/scrape-amazon-python), Walmart, Target, and major retailers use aggressive [anti bot detection](/blog/anti-bot-detection) including [Cloudflare](/blog/bypass-cloudflare), DataDome, and PerimeterX.
 
-Reader handles anti bot bypass through its stealth stack using Playwright with fingerprint-generator for browser fingerprint generation, identity randomization, and proxy rotation with datacenter and residential proxy pools. For price monitoring specifically, the extract capability (schema based extraction via LLM) is more resilient than selector based extraction because it does not break when the site changes its CSS class names or page structure.
+Reader handles anti bot bypass through its stealth stack using Playwright with fingerprint-generator for [browser](/browser) fingerprint generation, identity randomization, and proxy rotation with datacenter and residential proxy pools. For price monitoring specifically, the extract capability (schema based extraction via LLM) is more resilient than selector based extraction because it does not break when the site changes its CSS class names or page structure.
 
 ## Legal Considerations
 

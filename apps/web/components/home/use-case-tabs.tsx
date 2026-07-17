@@ -11,10 +11,10 @@ const useCases = [
     href: "/solutions/ecommerce",
   },
   {
-    tab: "Lead Generation",
+    tab: "Lead Research",
     description:
-      "Scrape company websites for enrichment data. Extract contacts, firmographics, and business signals from directories and public profiles. Feed clean data into your CRM through the API or no code tools like Zapier and Make.",
-    href: "/solutions/lead-generation",
+      "Scrape company websites for enrichment data. Extract structured business details, hiring signals, and public context from company pages. Feed clean data into your CRM, AI agents, or sales workflows.",
+    href: "/solutions/lead-research",
   },
   {
     tab: "Price Monitoring",
@@ -47,10 +47,10 @@ const useCases = [
     href: "/solutions/real-estate",
   },
   {
-    tab: "LLM Training Data",
+    tab: "LLM Dataset Collection",
     description:
-      "Crawl the web at scale for training datasets. Clean markdown output through Supermarkdown ensures consistent, high quality data for fine tuning. Self host the open source engine for full data sovereignty.",
-    href: "/solutions/llm-training-data",
+      "Collect clean Markdown from public web pages for LLM evaluation datasets, fine tuning preparation, research corpora, and AI data workflows. Keep source provenance with every record.",
+    href: "/solutions/llm-dataset-collection",
   },
 ];
 

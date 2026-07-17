@@ -23,7 +23,7 @@ faq:
 
 LLMs work best with clean, structured input. Feeding raw HTML into a language model wastes tokens on navigation menus, scripts, and markup that have nothing to do with the actual content. A 3,000 word article consumes roughly 8,000 tokens as HTML but only 2,800 as clean markdown. That is a 67% reduction with no loss of semantic information.
 
-Scraping a website to markdown gives you content in a format that preserves document structure (headings, lists, tables, links) while stripping everything else. This guide shows how to do it with Reader, from a single page to an entire site.
+Scraping a website to markdown gives you content in a format that preserves document structure (headings, lists, tables, links) while stripping everything else. This guide shows how to do it with Reader's [scrape](/scrape) and [crawl](/crawl) primitives, from a single page to an entire site.
 
 ## Scraping a Single Page
 
@@ -185,7 +185,7 @@ print(answer["result"])
 
 **For large crawls, use async mode.** Crawls with more than a few pages run asynchronously. The SDK handles polling, but monitor job status for large crawls (100+ pages) to catch failures early.
 
-Reader offers 1,000 free pages per month at [reader.dev](https://reader.dev). Full documentation is at [docs.reader.dev](https://docs.reader.dev). Source code is on [GitHub](https://github.com/vakra-dev/reader).
+Reader offers 1,000 free pages per month at [reader.dev](https://reader.dev). Full documentation is at [docs.reader.dev](https://docs.reader.dev). Source code is on [GitHub](https://github.com/vakra-dev/reader). You can also try the free [markdown converter](/markdown) to see the output quality instantly without an API key.
 
 ## Conclusion
 

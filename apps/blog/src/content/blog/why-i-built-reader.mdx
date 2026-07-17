@@ -42,9 +42,9 @@ Reader exists because I got tired of solving this problem over and over again.
 
 ## Two Primitives. That's It.
 
-Reader is open-source web scraping for LLMs. Two primitives: `scrape()` for URLs, `crawl()` for websites. Everything else happens under the hood.
+Reader is [open-source](/open-source) web scraping for LLMs. Two primitives: `scrape()` for URLs, `crawl()` for websites. Everything else happens under the hood.
 
-**Scrape** turns any URL into clean markdown:
+[**Scrape**](/scrape) turns any URL into clean markdown:
 
 ```javascript
 import { ReaderClient } from "@vakra-dev/reader-js";
@@ -63,7 +63,7 @@ await reader.close();
 
 You get markdown. Structured, clean, ready for your context window. No parsing HTML. No extracting main content. No fighting with JavaScript rendering.
 
-**Crawl** handles entire websites:
+[**Crawl**](/crawl) handles entire websites:
 
 ```javascript
 const result = await reader.crawl({

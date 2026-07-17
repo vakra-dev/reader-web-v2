@@ -33,3 +33,4 @@ pnpm-debug.log*
 
 # Internal docs
 .internal/
+.internal/briefs/

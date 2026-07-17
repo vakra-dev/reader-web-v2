@@ -4,9 +4,9 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://reader.dev"),
-  title: "Reader | AI Web Infrastructure Platform",
+  title: "Reader | Web Context API for AI Agents",
   description:
-    "The web infrastructure platform for AI. Scrape, crawl, and automate the web from a single API. Use the platform, the API, or self-host.",
+    "Reader gives AI agents reliable web context by turning URLs into clean Markdown, structured JSON, crawl results, and browser sessions.",
   icons: {
     icon: "/favicon.ico",
   },
@@ -24,9 +24,9 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Vakra" }],
   openGraph: {
-    title: "Reader | AI Web Infrastructure Platform",
+    title: "Reader | Web Context API for AI Agents",
     description:
-      "The web infrastructure platform for AI. Scrape, crawl, and automate the web from a single API.",
+      "Reader gives AI agents reliable web context by turning URLs into clean Markdown, structured JSON, crawl results, and browser sessions.",
     url: "https://reader.dev",
     siteName: "Reader",
     type: "website",
@@ -34,9 +34,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Reader | AI Web Infrastructure Platform",
+    title: "Reader | Web Context API for AI Agents",
     description:
-      "The web infrastructure platform for AI. Scrape, crawl, and automate the web from a single API.",
+      "Reader gives AI agents reliable web context by turning URLs into clean Markdown, structured JSON, crawl results, and browser sessions.",
     images: ["/og-image.png"],
   },
 };

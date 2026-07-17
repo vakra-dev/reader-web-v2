@@ -2,16 +2,26 @@ import Image from "next/image";
 
 const columns = [
   {
+    title: "Product",
+    links: [
+      { label: "Scrape", href: "/scrape" },
+      { label: "Crawl", href: "/crawl" },
+      { label: "Browser", href: "/browser" },
+      { label: "Extract", href: "/extract" },
+      { label: "Markdown Tool", href: "/markdown" },
+    ],
+  },
+  {
     title: "Solutions",
     links: [
       { label: "E-commerce", href: "/solutions/ecommerce" },
       { label: "Real Estate", href: "/solutions/real-estate" },
-      { label: "Lead Generation", href: "/solutions/lead-generation" },
+      { label: "Lead Research", href: "/solutions/lead-research" },
       { label: "Price Monitoring", href: "/solutions/price-monitoring" },
       { label: "Competitive Intelligence", href: "/solutions/competitive-intelligence" },
       { label: "RAG Pipelines", href: "/solutions/rag-pipelines" },
       { label: "AI Agents", href: "/solutions/ai-agents" },
-      { label: "LLM Training Data", href: "/solutions/llm-training-data" },
+      { label: "LLM Dataset Collection", href: "/solutions/llm-dataset-collection" },
     ],
   },
   {
@@ -23,6 +33,7 @@ const columns = [
       { label: "vs Browserbase", href: "/compare/browserbase" },
       { label: "vs Apify", href: "/compare/apify" },
       { label: "vs Bright Data", href: "/compare/bright-data" },
+      { label: "vs Zyte", href: "/compare/zyte" },
     ],
   },
   {
@@ -46,12 +57,6 @@ const columns = [
       { label: "Blog", href: "/blog" },
       { label: "GitHub", href: "https://github.com/vakra-dev/reader" },
       { label: "Open Source", href: "/open-source" },
-    ],
-  },
-  {
-    title: "Company",
-    links: [
-      { label: "About", href: "/about" },
       { label: "Discord", href: "https://discord.gg/6tjkq7J5WV" },
     ],
   },
@@ -72,7 +77,7 @@ export function Footer() {
               className="mb-4 opacity-70"
             />
             <p className="text-sm text-fg-tertiary leading-relaxed">
-              AI web infrastructure platform
+              Web context API for AI agents
             </p>
           </div>
 
@@ -102,7 +107,10 @@ export function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-10 pt-6 border-t border-edge/50 flex justify-end">
+        <div className="mt-10 pt-6 border-t border-edge/50 flex items-center justify-between">
+          <p className="text-sm text-fg-tertiary">
+            AI web infrastructure platform
+          </p>
           <div className="flex items-center gap-4">
             <a
               href="https://github.com/vakra-dev/reader"
