@@ -41,7 +41,7 @@ Reader is a web infrastructure platform with an open source core. Unlike most to
 
 **What it does.** Three primitives: Scrape (URL to clean markdown), Crawl (BFS discovery with depth/page limits), and Browser (CDP sessions for Playwright/Puppeteer). The scraping engine handles JavaScript rendering through headless Chromium, [anti bot bypass](/blog/anti-bot-detection) through Playwright with fingerprint-generator (browser fingerprint generation, identity randomization, and proxy rotation), and proxy rotation with datacenter and residential proxy pools.
 
-**Markdown output.** Default output is clean markdown processed through [Supermarkdown](/blog/introducing-supermarkdown-rust-html-markdown), a Rust HTML to markdown engine (MIT, separate repo). Single pass O(n) conversion with html5ever for malformed HTML recovery.
+**Markdown output.** Default output is clean markdown processed through [Supermarkdown](/blog/introducing-supermarkdown), a Rust HTML to markdown engine (MIT, separate repo). Single pass O(n) conversion with html5ever for malformed HTML recovery.
 
 **Self hosting.** The entire platform self hosts with no feature gaps. The managed cloud at reader.dev runs the same codebase. Node.js 18+, system Chrome dependencies.
 

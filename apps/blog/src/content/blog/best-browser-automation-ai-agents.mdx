@@ -69,7 +69,7 @@ Reader's Browser primitive provides cloud hosted, stealth Chrome sessions access
 
 **Stealth.** Built on Playwright with fingerprint-generator. Browser fingerprint generation, identity randomization, and proxy rotation are handled at the engine level. navigator.webdriver is false at the engine level (not patched via JavaScript). Canvas and WebGL fingerprints are randomized per session. Datacenter and residential proxy pools with proxy rotation.
 
-**For agents.** The [MCP server](/blog/connect-reader-ai-agent-mcp) exposes browser session creation alongside scraping, crawling, and extraction. AI agents in [Claude Code](/blog/add-web-scraping-claude-code-reader-mcp), Cursor, and VS Code can create browser sessions, navigate, and extract data through natural MCP tool calls. Sessions persist for up to 60 minutes for multi step agent workflows.
+**For agents.** The [MCP server](/blog/reader-mcp-server) exposes browser session creation alongside scraping, crawling, and extraction. AI agents in [Claude Code](/blog/claude-code-web-scraping), Cursor, and VS Code can create browser sessions, navigate, and extract data through natural MCP tool calls. Sessions persist for up to 60 minutes for multi step agent workflows.
 
 **Unique angle.** Reader combines browser sessions with scraping and crawling under one API and one credit pool. An agent can scrape a page to markdown (read), crawl a site for context (research), and use a browser session for interaction (act), all through the same platform.
 

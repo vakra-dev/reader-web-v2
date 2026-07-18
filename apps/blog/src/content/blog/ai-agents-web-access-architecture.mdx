@@ -197,7 +197,7 @@ Crawling returns markdown for every discovered page. For a 100 page crawl, that 
 
 **Summarize each page.** Process crawl results through a summarization step. Each page becomes a 100 to 200 word summary. 100 summaries fit in a context window.
 
-**Index and retrieve.** Store crawl results in a vector database. When the agent needs information, it retrieves the most relevant chunks. This is the [RAG pipeline](/blog/building-rag-pipeline-live-web-data) pattern.
+**Index and retrieve.** Store crawl results in a vector database. When the agent needs information, it retrieves the most relevant chunks. This is the [RAG pipeline](/blog/rag-pipeline-web-data) pattern.
 
 **Discover then read.** Use crawl in discover mode (scrape: false) to get a list of URLs without content. The agent scans the URL list, identifies the most relevant pages, and scrapes only those. This reduces the content volume by 80 to 90 percent.
 
@@ -265,7 +265,7 @@ User query -> Agent assesses task ->
 -> Agent responds with results
 ```
 
-This is the architecture that [MCP](/blog/connect-reader-ai-agent-mcp) enables naturally. The agent has all 9 Reader tools available and selects the right one based on the task requirements.
+This is the architecture that [MCP](/blog/reader-mcp-server) enables naturally. The agent has all 9 Reader tools available and selects the right one based on the task requirements.
 
 ## When to Scrape vs When to Browse
 

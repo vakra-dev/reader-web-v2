@@ -45,7 +45,7 @@ Before evaluating tools, it helps to define the requirements. AI scraping worklo
 
 Reader is a cloud web infrastructure platform with an open source core under the Apache 2.0 license. It provides three primitives ([Scrape](/scrape), [Crawl](/crawl), Browser) through a single API endpoint.
 
-**Markdown output.** Reader returns clean markdown by default, processed through [Supermarkdown](/blog/introducing-supermarkdown-rust-html-markdown), a Rust HTML to markdown engine built specifically for web scraping. Supermarkdown uses html5ever (the Firefox HTML parser) for malformed HTML recovery and performs single pass O(n) conversion.
+**Markdown output.** Reader returns clean markdown by default, processed through [Supermarkdown](/blog/introducing-supermarkdown), a Rust HTML to markdown engine built specifically for web scraping. Supermarkdown uses html5ever (the Firefox HTML parser) for malformed HTML recovery and performs single pass O(n) conversion.
 
 **Structured extraction.** The [extract](/extract) capability accepts a JSON schema or natural language prompt and returns validated JSON. Missing fields return null rather than hallucinated values.
 
@@ -251,7 +251,7 @@ For AI workloads specifically, the relevant metric is not just "did the request 
 
 The right tool depends on your primary use case. Most teams use one or two tools rather than all of them.
 
-**Building RAG pipelines with web data.** You need clean markdown and crawling. Reader (unified API, Rust markdown engine, [crawling built in](/blog/crawl-website-to-markdown-one-command)), Firecrawl (largest ecosystem, crawl + map endpoints), or Crawl4AI (free, local, Apache 2.0) are the strongest fits. All three produce markdown that [chunks well](/blog/building-rag-pipeline-live-web-data) for embedding and retrieval.
+**Building RAG pipelines with web data.** You need clean markdown and crawling. Reader (unified API, Rust markdown engine, [crawling built in](/blog/crawl-website-to-markdown)), Firecrawl (largest ecosystem, crawl + map endpoints), or Crawl4AI (free, local, Apache 2.0) are the strongest fits. All three produce markdown that [chunks well](/blog/rag-pipeline-web-data) for embedding and retrieval.
 
 **[Giving AI agents web access.](/solutions/ai-agents)** You need MCP support and browser sessions. Reader (9 MCP tools + CDP sessions), Firecrawl (12 MCP tools + agent endpoint), Browserbase (Stagehand AI SDK), or Bright Data (60+ MCP tools) cover different angles. Reader and Firecrawl are the most complete for scrape + browse in one tool. Browserbase is the best for pure browser agent workflows.
 
