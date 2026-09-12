@@ -64,7 +64,7 @@ Important caveats: benchmark results are point-in-time and vary by target site. 
 
 [Reader](https://reader.dev) is an open source web infrastructure platform (Apache 2.0) with three core primitives designed for AI workloads.
 
-[**Read**](/scrape) scrapes any URL and returns clean, LLM-ready markdown by default. The conversion is handled by [Supermarkdown](https://supermarkdown.dev), a Rust engine that processes pages in under 5 milliseconds via single-pass O(n) DOM traversal. This is 10 to 50 times faster than JavaScript-based converters. The speed difference matters at scale: when you are processing thousands of pages for a RAG pipeline, conversion throughput becomes a bottleneck.
+[**Read**](/scrape) scrapes any URL and returns clean, LLM-ready markdown by default. The conversion is handled by [Supermarkdown](https://supermarkdown.dev), a Rust engine that processes pages in under 5 milliseconds via single-pass O(n) DOM traversal. Benchmarked at 67.8 MB/s throughput, roughly 5x faster than JavaScript-based converters. The speed difference matters at scale: when you are processing thousands of pages for a RAG pipeline, conversion throughput becomes a bottleneck.
 
 [**Crawl**](/crawl) extends reading across entire domains with configurable depth, URL pattern filtering, and deduplication. The output is structured and ready for bulk ingestion into vector databases or LLM training pipelines.
 

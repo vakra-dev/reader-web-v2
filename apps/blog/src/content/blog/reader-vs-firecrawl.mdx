@@ -43,7 +43,7 @@ Firecrawl offers additional endpoints for site mapping (discover all URLs on a d
 
 Firecrawl also offers a search endpoint that lets you search the web and get full content from results in a single call. This is a capability Reader does not currently offer but is on the roadmap.
 
-Reader's scraping is powered by Supermarkdown, a purpose built HTML to markdown conversion engine written in Rust. It performs a single pass O(n) traversal of the DOM and converts a typical webpage in under 5 milliseconds. This is 10 to 50 times faster than JavaScript based converters like Turndown.js. At high volume, this speed difference compounds. Supermarkdown is open source under the MIT license and available as both a Rust crate and an npm package at supermarkdown.dev.
+Reader's scraping is powered by Supermarkdown, a purpose built HTML to markdown conversion engine written in Rust. It performs a single pass O(n) traversal of the DOM and converts a typical webpage in under 5 milliseconds. Benchmarked at 67.8 MB/s throughput, roughly 5x faster than JavaScript based converters like Turndown.js. At high volume, this speed difference compounds. Supermarkdown is open source under the MIT license and available as both a Rust crate and an npm package at supermarkdown.dev.
 
 Firecrawl uses its own conversion pipeline, which also produces clean markdown output. For most use cases, both tools deliver good output quality.
 

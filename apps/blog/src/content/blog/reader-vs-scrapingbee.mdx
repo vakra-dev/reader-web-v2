@@ -41,7 +41,7 @@ Reader is an open source web infrastructure platform built for the AI era. It is
 
 Reader is built around three core primitives. Read takes any URL and returns clean, LLM ready markdown. JavaScript rendering, anti bot bypass, proxy rotation, and content extraction all happen automatically. Crawl extends this across entire domains with configurable depth, URL pattern filtering, and structured output. Browse gives you full cloud browser sessions with CDP (Chrome DevTools Protocol) compatibility, meaning your existing Playwright and Puppeteer scripts connect and work without modification.
 
-At the core of Reader's content conversion is Supermarkdown, an HTML to markdown engine built from scratch in Rust. It performs a single pass O(n) DOM traversal and converts a typical webpage in under 5 milliseconds. This is 10 to 50 times faster than JavaScript based converters like Turndown.js.
+At the core of Reader's content conversion is Supermarkdown, an HTML to markdown engine built from scratch in Rust. It performs a single pass O(n) DOM traversal and converts a typical webpage in under 5 milliseconds. Benchmarked at 67.8 MB/s throughput, roughly 5x faster than JavaScript based converters like Turndown.js.
 
 Reader offers 1,000 free pages per month on the managed platform with no credit card required.
 

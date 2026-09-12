@@ -12,7 +12,7 @@ keywords:
 schemaType: "article"
 faq:
   - question: "Which HTML to markdown library is the fastest?"
-    answer: "Supermarkdown and html-to-markdown-rs are both Rust based and significantly faster than JavaScript or Python alternatives. The single pass architecture and lack of garbage collector overhead make Rust converters especially effective for high volume pipelines. For JavaScript specifically, node-html-markdown's streaming approach is faster than Turndown on large documents."
+    answer: "Supermarkdown and html-to-markdown-rs are both Rust based and significantly faster than JavaScript or Python alternatives. Supermarkdown benchmarks at 67.8 MB/s throughput, roughly 5x faster than Turndown (13.8 MB/s) across 24 real web pages. The single pass architecture and lack of garbage collector overhead make Rust converters especially effective for high volume pipelines."
   - question: "Which library handles malformed HTML best?"
     answer: "Supermarkdown, html-to-markdown-rs, and Pandoc all use parsers with error recovery. Supermarkdown and html-to-markdown-rs use html5ever (the Firefox HTML parser), which implements the WHATWG specification's error recovery algorithm. Turndown, markdownify, and html2text assume well formed HTML and may produce incorrect output on malformed input."
   - question: "Can any of these extract main content from a web page?"
@@ -131,7 +131,6 @@ import { convert } from '@vakra-dev/supermarkdown';
 const markdown = convert(html, {
   baseUrl: 'https://example.com',
   excludeSelectors: ['nav', '.sidebar', '.footer', '.ad'],
-  codeBlockStyle: 'fenced'
 });
 ```
 
@@ -177,11 +176,11 @@ It supports CommonMark and Djot output formats and includes metadata extraction.
 
 ## node-html-markdown (JavaScript)
 
-node-html-markdown takes a streaming tokenizer approach rather than DOM based conversion. It has roughly 333,000 weekly npm downloads and is faster than Turndown on large documents because it processes HTML as a stream rather than building a full DOM tree first.
+node-html-markdown takes a tokenizer approach rather than full DOM based conversion. It has roughly 333,000 weekly npm downloads and performs comparably to Turndown on small documents (under 50KB). However, on large documents it exhibits O(n^2) scaling that makes it significantly slower than Turndown. In benchmarks on a 1.1MB Node.js documentation page, node-html-markdown took 28.5 seconds per conversion versus Turndown's 117ms.
 
-**Strengths:** Faster than Turndown on large documents, streaming architecture, good for high volume processing in Node.js.
+**Strengths:** Comparable to Turndown on small to medium documents, good API surface, active development.
 
-**Limitations:** Fewer custom rules and plugins than Turndown. Smaller community.
+**Limitations:** O(n^2) performance scaling on large documents. Fewer custom rules and plugins than Turndown. Smaller community.
 
 ## ReaderLM v2 (Neural)
 
@@ -211,7 +210,7 @@ It handles up to 512K combined input and output tokens, supports 29 languages, a
 
 **JavaScript project, need customization:** Turndown.js. Largest ecosystem, most plugins, works in browser and Node.js.
 
-**JavaScript project, need speed on large documents:** node-html-markdown. Streaming tokenizer is faster than Turndown's DOM approach.
+**JavaScript project, simple API:** node-html-markdown. Good for small to medium documents. Avoid for large documents (over 500KB) due to O(n^2) scaling.
 
 **Python project:** markdownify. Best balance of accuracy, features, and active maintenance.
 

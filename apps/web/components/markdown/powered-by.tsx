@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 
 const stats = [
   { value: "<5ms", label: "per page" },
-  { value: "10 to 50x", label: "faster than JS alternatives" },
+  { value: "~5x", label: "faster than JS alternatives" },
   { value: "O(n)", label: "single-pass conversion" },
 ];
 
@@ -32,7 +32,7 @@ export function PoweredBy() {
                 converting millions of pages.
               </p>
               <p>
-                Single-pass O(n) conversion. Sub-5ms for a typical webpage. 10 to 50x
+                Single-pass O(n) conversion. Sub-5ms for a typical webpage. About 5x
                 faster than JavaScript alternatives. Because when your agent is waiting
                 on web data, every millisecond counts.
               </p>
